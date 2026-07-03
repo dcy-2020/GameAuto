@@ -153,6 +153,18 @@ GameAuto/
 └── README.md
 ```
 
+## 📎 依赖的开源工具
+
+本项目是**编排调度层**，实际游戏自动化由以下开源项目驱动：
+
+| 游戏 | 工具 | 仓库 |
+|------|------|------|
+| 鸣潮 | ok-ww | [ok-oldking/ok-wuthering-waves](https://github.com/ok-oldking/ok-wuthering-waves) |
+| 终末地 | MaaEnd | [MaaEnd/MaaEnd](https://github.com/MaaEnd/MaaEnd) |
+| 异环 | ok-nte | 基于 ok-script 框架开发 |
+
+> 使用前请先下载安装上述工具，并在 GUI 中填写对应的可执行文件路径。
+
 ## ⚠️ 注意事项
 
 1. **管理员权限**: 程序需要管理员权限以控制游戏窗口
