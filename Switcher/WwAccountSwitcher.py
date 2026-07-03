@@ -3,6 +3,7 @@ import ctypes
 from ctypes import wintypes
 import pyautogui
 import pydirectinput
+from PIL import Image, ImageGrab
 
 def is_admin():
     """检查当前是否具备管理员权限"""
@@ -89,89 +90,169 @@ class WwAccountSwitcher:
             print("❌ 未找到游戏窗口，请确认游戏是否已启动。")
             return False
 
+    def _locate_image(self, img_name, tolerance=15, min_ratio=0.80):
+        """返回模板在屏幕上的 (x, y) 中心坐标，找不到返回 None"""
+        img_path = self._get_img_path(img_name)
+        try:
+            template = Image.open(img_path).convert('RGB')
+            screen = ImageGrab.grab().convert('RGB')
+        except Exception:
+            return None
+        tw, th = template.size
+        sw, sh = screen.size
+        if tw > sw or th > sh:
+            return None
+
+        # 缩放粗匹配
+        scale = 4
+        st = template.resize((tw // scale, th // scale), Image.LANCZOS)
+        ss = screen.resize((sw // scale, sh // scale), Image.LANCZOS)
+        st_pix = list(st.getdata())
+        stw, sth = st.size
+        ssw, ssh = ss.size
+        best_x = best_y = 0
+        best_ratio = 0.0
+        step = max(1, min(stw, sth) // 8)
+
+        for y in range(0, ssh - sth, step):
+            for x in range(0, ssw - stw, step):
+                region = ss.crop((x, y, x + stw, y + sth))
+                rpix = list(region.getdata())
+                match = sum(1 for i in range(0, len(st_pix), 3)
+                           if abs(st_pix[i][0] - rpix[i][0]) < tolerance
+                           and abs(st_pix[i][1] - rpix[i][1]) < tolerance
+                           and abs(st_pix[i][2] - rpix[i][2]) < tolerance)
+                ratio = match / (len(st_pix) / 3)
+                if ratio > best_ratio:
+                    best_ratio = ratio
+                    best_x, best_y = x * scale, y * scale
+
+        if best_ratio < min_ratio:
+            return None
+        return (best_x + tw // 2, best_y + th // 2)
+
     def wait_and_click(self, img_name, timeout=30, wait_after=1.0):
-        """核心方法：带超时的动态等待并点击目标图片"""
         img_path = self._get_img_path(img_name)
         if not os.path.exists(img_path):
             print(f"❌ 错误: 找不到截图文件 {img_path}")
             return False
-
         print(f"  └─ 寻找: {img_name} ...")
         start_time = time.time()
-        
         while time.time() - start_time < timeout:
-            try:
-                location = pyautogui.locateCenterOnScreen(img_path, confidence=self.confidence)
-                if location:
-                    pydirectinput.click(int(location.x), int(location.y))
-                    print(f"  └─ ✅ 点击成功")
-                    time.sleep(wait_after)
-                    return True
-            except pyautogui.ImageNotFoundException:
-                pass
+            loc = self._locate_image(img_name)
+            if loc:
+                pydirectinput.click(loc[0], loc[1])
+                print(f"  └─ ✅ 点击成功")
+                time.sleep(wait_after)
+                return True
             time.sleep(0.5)
-            
         print(f"  └─ ⚠️ 超时未找到 ({timeout}s)")
         return False
-    
+
     def wait_for_image(self, img_name, timeout=30):
-        """
-        核心方法补充：仅等待图片出现，不执行点击。
-        用于判断场景是否加载完毕，避免过早触发动作。
-        """
         img_path = self._get_img_path(img_name)
         if not os.path.exists(img_path):
             print(f"❌ 错误: 找不到截图文件 {img_path}")
             return False
-
         print(f"  └─ 视觉锚点等待: {img_name} ...")
         start_time = time.time()
-        
         while time.time() - start_time < timeout:
-            try:
-                if pyautogui.locateOnScreen(img_path, confidence=self.confidence):
-                    return True
-            except pyautogui.ImageNotFoundException:
-                pass
+            if self._template_match(img_name):
+                return True
             time.sleep(0.5)
-            
         return False
-    
+
     def identify_account_on_login_screen(self, account_list):
-        """
-        在登录界面（未展开下拉框时）识别当前默认展示的账号
-        """
         print("👁️ 正在扫描登录界面的当前账号...")
-        time.sleep(1) # 给UI一点渲染时间
-        
+        time.sleep(1)
         for acc in account_list:
-            current_img = f"acc_{acc}.png"
-            img_path = self._get_img_path(current_img)
-            
-            if not os.path.exists(img_path):
-                print(f"  └─ ⚠️ 警告: 缺少特征截图 {current_img}")
-                continue
-                
-            try:
-                if pyautogui.locateOnScreen(img_path, confidence=0.85):
-                    print(f"  └─ ✅ 识别成功！当前框内账号是: [{acc}]")
-                    return acc
-            except pyautogui.ImageNotFoundException:
-                pass
-                
+            if self._template_match(f"acc_{acc}.png"):
+                print(f"  └─ ✅ 识别成功！当前框内账号是: [{acc}]")
+                return acc
         print("  └─ ❓ 未能识别出框内的账号特征")
         return None
     
-    def is_on_esc_menu(self):
-        """检查 ESC 菜单 — 优先 opencv，降级纯 Python"""
-        img_path = self._get_img_path("power_btn.png")
+    def _template_match(self, img_name, tolerance=15, min_ratio=0.80):
+        """快速模板匹配 — 缩放粗筛 + 原尺寸验证，不依赖 opencv/numpy"""
+        img_path = self._get_img_path(img_name)
         try:
-            return pyautogui.locateOnScreen(img_path, confidence=0.85) is not None
+            template = Image.open(img_path).convert('RGB')
+            screen = ImageGrab.grab().convert('RGB')
         except Exception:
-            try:
-                return pyautogui.locateOnScreen(img_path) is not None
-            except Exception:
-                return False
+            return False
+
+        tw, th = template.size
+        sw, sh = screen.size
+        if tw > sw or th > sh:
+            return False
+
+        # 1. 缩放到 1/4，快速粗匹配（~1 秒）
+        scale = 4
+        st = template.resize((tw // scale, th // scale), Image.LANCZOS)
+        ss = screen.resize((sw // scale, sh // scale), Image.LANCZOS)
+        st_pix = list(st.getdata())
+        stw, sth = st.size
+        ssw, ssh = ss.size
+
+        best_x = best_y = 0
+        best_ratio = 0.0
+        step = max(1, min(stw, sth) // 8)
+
+        for y in range(0, ssh - sth, step):
+            for x in range(0, ssw - stw, step):
+                region = ss.crop((x, y, x + stw, y + sth))
+                rpix = list(region.getdata())
+                match = 0
+                total = len(st_pix)
+                for i in range(0, total, 3):
+                    if (abs(st_pix[i][0] - rpix[i][0]) < tolerance and
+                        abs(st_pix[i][1] - rpix[i][1]) < tolerance and
+                        abs(st_pix[i][2] - rpix[i][2]) < tolerance):
+                        match += 1
+                ratio = match / (total / 3)
+                if ratio > best_ratio:
+                    best_ratio = ratio
+                    best_x, best_y = x * scale, y * scale
+
+        if best_ratio < min_ratio:
+            return False
+
+        # 2. 在原尺寸精确验证最佳候选位置
+        check_margin = 20
+        x1 = max(0, best_x - check_margin)
+        y1 = max(0, best_y - check_margin)
+        x2 = min(sw, best_x + tw + check_margin)
+        y2 = min(sh, best_y + th + check_margin)
+        region = screen.crop((x1, y1, x2, y2))
+        rw, rh = region.size
+
+        tpix = list(template.getdata())
+        tcount = len(tpix)
+        best_final = 0.0
+
+        for y in range(0, rh - th, 2):
+            for x in range(0, rw - tw, 2):
+                sub = region.crop((x, y, x + tw, y + th))
+                rpix = list(sub.getdata())
+                match = 0
+                for i in range(0, tcount, 4):
+                    if (abs(tpix[i][0] - rpix[i][0]) < tolerance and
+                        abs(tpix[i][1] - rpix[i][1]) < tolerance and
+                        abs(tpix[i][2] - rpix[i][2]) < tolerance):
+                        match += 1
+                ratio = match / (tcount / 4)
+                if ratio > best_final:
+                    best_final = ratio
+                if best_final >= min_ratio:
+                    return True
+
+        return best_final >= min_ratio
+
+    def is_on_esc_menu(self):
+        try:
+            return self._template_match("power_btn.png")
+        except Exception:
+            return False
 
     # def switch_account(self, target_account_suffix, known_accounts=["7267", "8071", "8701"]):
     #     """
