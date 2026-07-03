@@ -39,13 +39,24 @@ class WwAccountSwitcher:
         res_key = _get_resolution_key()
         self.img_dir = os.path.join(base_img_dir, res_key)
 
-        # 2. 打包后 _MEIPASS 只读，直接用基础目录（PNG 已在内）
+        # 2. 打包后 _MEIPASS 只读 → 解压到 exe 旁的 writable 目录
         if getattr(sys, 'frozen', False):
-            if not os.path.exists(self.img_dir):
-                print(f"⏩ 打包环境，使用基础图包目录: {base_img_dir}")
-                self.img_dir = base_img_dir
+            writable_base = os.path.join(os.path.dirname(sys.executable), img_folder_name)
+            writable_res = os.path.join(writable_base, res_key)
+            zip_path = os.path.join(base_img_dir, f"{res_key}.zip")
+            if not os.path.exists(writable_res) and os.path.exists(zip_path):
+                try:
+                    os.makedirs(writable_res, exist_ok=True)
+                    with zipfile.ZipFile(zip_path, 'r') as zf:
+                        zf.extractall(writable_res)
+                    print(f"✅ 已解压 {res_key} 图包到 {writable_res}")
+                except Exception as e:
+                    print(f"⚠️ 解压失败: {e}")
+                    writable_res = None
+            self.img_dir = writable_res if (writable_res and os.path.exists(writable_res)) else base_img_dir
+
+        # 3. 源码运行：从 zip 解压到源码目录（可写）
         elif not os.path.exists(self.img_dir):
-            # 源码运行：尝试从 zip 解压对应分辨率图包
             zip_path = os.path.join(base_img_dir, f"{res_key}.zip")
             if os.path.exists(zip_path):
                 print(f"📦 首次使用，正在解压 {res_key} 分辨率图包...")
@@ -60,7 +71,7 @@ class WwAccountSwitcher:
             else:
                 self.img_dir = base_img_dir
 
-        # 3. 兜底
+        # 4. 兜底
         if not os.path.exists(self.img_dir):
             print(f"⚠️ 找不到图片文件夹 {self.img_dir}，使用 {base_img_dir}")
             self.img_dir = base_img_dir
