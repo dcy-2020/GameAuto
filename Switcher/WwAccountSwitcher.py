@@ -1,11 +1,20 @@
-import pyautogui
-import time
-import os
-import zipfile
-import pydirectinput
+import os, sys, time, zipfile
 import ctypes
 from ctypes import wintypes
-import sys
+
+# pyautogui import 时会尝试加载 cv2，cv2 找不到 numpy 会打印错误到 stderr
+# 先吞掉 stderr，import 完再恢复
+_stderr = sys.stderr
+sys.stderr = open(os.devnull, 'w')
+try:
+    import pyautogui
+    import pyscreeze
+    pyscreeze.USE_OPENCV = False  # 强制纯 Python 匹配，不依赖 opencv/numpy
+finally:
+    sys.stderr.close()
+    sys.stderr = _stderr
+
+import pydirectinput
 
 def is_admin():
     """检查当前是否具备管理员权限"""
@@ -166,15 +175,9 @@ class WwAccountSwitcher:
         return None
     
     def is_on_esc_menu(self):
-        """快速检查 ESC 菜单界面是否存在 — 强制纯 Python 模式避免 opencv/numpy 依赖"""
         img_path = self._get_img_path("power_btn.png")
         try:
-            import pyscreeze
-            pyscreeze.USE_OPENCV = False  # 强制关掉 opencv，用纯 Python 匹配
-        except Exception:
-            pass
-        try:
-            return pyautogui.locateOnScreen(img_path, confidence=None) is not None
+            return pyautogui.locateOnScreen(img_path) is not None
         except Exception as e:
             print(f"⚠️ is_on_esc_menu 异常: {type(e).__name__}: {e}")
             return False
