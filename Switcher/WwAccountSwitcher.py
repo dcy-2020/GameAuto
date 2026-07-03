@@ -1,19 +1,7 @@
 import os, sys, time, zipfile
 import ctypes
 from ctypes import wintypes
-
-# pyautogui import 时会尝试加载 cv2，cv2 找不到 numpy 会打印错误到 stderr
-# 先吞掉 stderr，import 完再恢复
-_stderr = sys.stderr
-sys.stderr = open(os.devnull, 'w')
-try:
-    import pyautogui
-    import pyscreeze
-    pyscreeze.USE_OPENCV = False  # 强制纯 Python 匹配，不依赖 opencv/numpy
-finally:
-    sys.stderr.close()
-    sys.stderr = _stderr
-
+import pyautogui
 import pydirectinput
 
 def is_admin():
@@ -175,36 +163,11 @@ class WwAccountSwitcher:
         return None
     
     def is_on_esc_menu(self):
-        """纯 PIL 模板匹配，带容差（不依赖 opencv/numpy，打包前后一致）"""
+        """检查 ESC 菜单 — 优先 opencv，降级纯 Python"""
         img_path = self._get_img_path("power_btn.png")
         try:
-            from PIL import Image, ImageGrab
-            template = Image.open(img_path).convert('RGB')
-            screen = ImageGrab.grab().convert('RGB')
-            tw, th = template.size
-            sw, sh = screen.size
-            if tw > sw or th > sh:
-                return False
-
-            tpix = list(template.getdata())
-            tcount = len(tpix)
-
-            # 步进扫描屏幕，每步计算匹配率
-            for y in range(0, sh - th, 5):
-                for x in range(0, sw - tw, 5):
-                    region = screen.crop((x, y, x + tw, y + th))
-                    rpix = list(region.getdata())
-                    match = 0
-                    for i in range(0, tcount, 3):  # 每 3 个像素抽 1 个
-                        tr, tg, tb = tpix[i]
-                        rr, rg, rb = rpix[i]
-                        if abs(tr - rr) < 20 and abs(tg - rg) < 20 and abs(tb - rb) < 20:
-                            match += 1
-                    if match / (tcount / 3) > 0.85:
-                        return True
-            return False
-        except Exception as e:
-            print(f"⚠️ is_on_esc_menu 异常: {type(e).__name__}: {e}")
+            return pyautogui.locateOnScreen(img_path, confidence=0.85) is not None
+        except Exception:
             try:
                 return pyautogui.locateOnScreen(img_path) is not None
             except Exception:

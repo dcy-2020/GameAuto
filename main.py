@@ -7,9 +7,16 @@ import sys
 import os
 import ctypes
 
-# 必须在任何 GUI / 截图操作前调用，否则 PyInstaller 打包后 DPI 虚拟化导致模板匹配失败
+# 必须在任何 GUI / 截图操作前调用
 try:
     ctypes.windll.user32.SetProcessDPIAware()
+except Exception:
+    pass
+
+# 强制初始化 numpy+opencv，确保 pyautogui 后续能正常使用 confidence 参数
+try:
+    import numpy
+    import cv2
 except Exception:
     pass
 

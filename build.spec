@@ -70,8 +70,6 @@ a = Analysis(
         'numpy',
         'pandas',
         'scipy',
-        'cv2',
-        'numpy',
     ],
     noarchive=False,
 )
