@@ -24,6 +24,10 @@ build/
 backup/
 _old_archive.zip
 
+# 模板图片（自动解压，忽略子目录）
+Switcher/imgs/1080P/
+Switcher/imgs/2K/
+
 # 打包输出
 *.spec.bak
 

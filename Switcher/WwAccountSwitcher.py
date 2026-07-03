@@ -1,6 +1,7 @@
 import pyautogui
 import time
 import os
+import zipfile
 import pydirectinput
 import ctypes
 from ctypes import wintypes
@@ -13,15 +14,48 @@ def is_admin():
     except:
         return False
 
+
+def _get_resolution_key() -> str:
+    """检测屏幕分辨率，返回 '1080P' 或 '2K'"""
+    try:
+        w = ctypes.windll.user32.GetSystemMetrics(0)
+        h = ctypes.windll.user32.GetSystemMetrics(1)
+    except Exception:
+        w, h = pyautogui.size()
+    if h <= 1080:
+        return "1080P"
+    else:
+        return "2K"
+
+
 class WwAccountSwitcher:
     def __init__(self, img_folder_name="imgs", confidence=0.85):
-        """初始化切号器"""
+        """初始化切号器 — 自动检测分辨率并加载对应图包"""
         current_script_dir = os.path.dirname(os.path.abspath(__file__))
-        self.img_dir = os.path.join(current_script_dir, img_folder_name)
+        base_img_dir = os.path.join(current_script_dir, img_folder_name)
         self.confidence = confidence
 
+        # 1. 检测分辨率，选择对应分辨率的图片子目录
+        res_key = _get_resolution_key()
+        self.img_dir = os.path.join(base_img_dir, res_key)
+
+        # 2. 如果子目录不存在，从 zip 解压
+        zip_path = os.path.join(base_img_dir, f"{res_key}.zip")
+        if not os.path.exists(self.img_dir) and os.path.exists(zip_path):
+            print(f"📦 首次使用，正在解压 {res_key} 分辨率图包...")
+            try:
+                os.makedirs(self.img_dir, exist_ok=True)
+                with zipfile.ZipFile(zip_path, 'r') as zf:
+                    zf.extractall(self.img_dir)
+                print(f"✅ 已解压到 {self.img_dir}")
+            except Exception as e:
+                print(f"⚠️ 解压失败: {e}，回退到基础目录")
+                self.img_dir = base_img_dir
+
+        # 3. 兜底：如果还是没有，用基础目录（兼容旧版不分子目录的情况）
         if not os.path.exists(self.img_dir):
-            print(f"⚠️ 警告: 找不到图片文件夹 {self.img_dir}")
+            print(f"⚠️ 警告: 找不到图片文件夹 {self.img_dir}，使用 {base_img_dir}")
+            self.img_dir = base_img_dir
 
     def _get_img_path(self, img_name):
         return os.path.join(self.img_dir, img_name)
