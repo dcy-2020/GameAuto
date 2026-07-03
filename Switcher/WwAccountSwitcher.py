@@ -175,12 +175,40 @@ class WwAccountSwitcher:
         return None
     
     def is_on_esc_menu(self):
+        """纯 PIL 模板匹配，带容差（不依赖 opencv/numpy，打包前后一致）"""
         img_path = self._get_img_path("power_btn.png")
         try:
-            return pyautogui.locateOnScreen(img_path) is not None
+            from PIL import Image, ImageGrab
+            template = Image.open(img_path).convert('RGB')
+            screen = ImageGrab.grab().convert('RGB')
+            tw, th = template.size
+            sw, sh = screen.size
+            if tw > sw or th > sh:
+                return False
+
+            tpix = list(template.getdata())
+            tcount = len(tpix)
+
+            # 步进扫描屏幕，每步计算匹配率
+            for y in range(0, sh - th, 5):
+                for x in range(0, sw - tw, 5):
+                    region = screen.crop((x, y, x + tw, y + th))
+                    rpix = list(region.getdata())
+                    match = 0
+                    for i in range(0, tcount, 3):  # 每 3 个像素抽 1 个
+                        tr, tg, tb = tpix[i]
+                        rr, rg, rb = rpix[i]
+                        if abs(tr - rr) < 20 and abs(tg - rg) < 20 and abs(tb - rb) < 20:
+                            match += 1
+                    if match / (tcount / 3) > 0.85:
+                        return True
+            return False
         except Exception as e:
             print(f"⚠️ is_on_esc_menu 异常: {type(e).__name__}: {e}")
-            return False
+            try:
+                return pyautogui.locateOnScreen(img_path) is not None
+            except Exception:
+                return False
 
     # def switch_account(self, target_account_suffix, known_accounts=["7267", "8071", "8701"]):
     #     """
