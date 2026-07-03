@@ -35,48 +35,8 @@ class WwAccountSwitcher:
         base_img_dir = os.path.join(current_script_dir, img_folder_name)
         self.confidence = confidence
 
-        # 1. 检测分辨率，选择对应分辨率的图片子目录
-        res_key = _get_resolution_key()
-        self.img_dir = os.path.join(base_img_dir, res_key)
-
-        # 2. 打包后 _MEIPASS 只读 → 解压到 exe 同级可写目录
-        if getattr(sys, 'frozen', False):
-            # 仅用文件夹名（忽略绝对路径前缀），确保写到 exe 旁而非 _MEIPASS
-            folder_name = os.path.basename(base_img_dir.rstrip("/\\"))
-            writable_base = os.path.join(os.path.dirname(sys.executable), folder_name)
-            writable_res = os.path.join(writable_base, res_key)
-            zip_path = os.path.join(base_img_dir, f"{res_key}.zip")
-            if not os.path.exists(writable_res) and os.path.exists(zip_path):
-                try:
-                    os.makedirs(writable_res, exist_ok=True)
-                    with zipfile.ZipFile(zip_path, 'r') as zf:
-                        zf.extractall(writable_res)
-                    print(f"✅ 已解压 {res_key} 图包到 {writable_res}")
-                except Exception as e:
-                    print(f"⚠️ 解压失败: {e}")
-                    writable_res = None
-            self.img_dir = writable_res if (writable_res and os.path.exists(writable_res)) else base_img_dir
-
-        # 3. 源码运行：从 zip 解压到源码目录（可写）
-        elif not os.path.exists(self.img_dir):
-            zip_path = os.path.join(base_img_dir, f"{res_key}.zip")
-            if os.path.exists(zip_path):
-                print(f"📦 首次使用，正在解压 {res_key} 分辨率图包...")
-                try:
-                    os.makedirs(self.img_dir, exist_ok=True)
-                    with zipfile.ZipFile(zip_path, 'r') as zf:
-                        zf.extractall(self.img_dir)
-                    print(f"✅ 已解压到 {self.img_dir}")
-                except Exception as e:
-                    print(f"⚠️ 解压失败: {e}，回退到基础目录")
-                    self.img_dir = base_img_dir
-            else:
-                self.img_dir = base_img_dir
-
-        # 4. 兜底
-        if not os.path.exists(self.img_dir):
-            print(f"⚠️ 找不到图片文件夹 {self.img_dir}，使用 {base_img_dir}")
-            self.img_dir = base_img_dir
+        # 直接使用基础目录的 PNG（与原版脚本一致，已验证可正常识别）
+        self.img_dir = base_img_dir
 
     def _get_img_path(self, img_name):
         return os.path.join(self.img_dir, img_name)
