@@ -701,6 +701,9 @@ class GameAutoGUI(ctk.CTk):
         )
         self._runner.start()
 
+        # 最小化 GUI，避免遮挡游戏画面导致模板匹配失败
+        self.after(1000, self.iconify)
+
     def _stop_task(self):
         """停止任务（非阻塞：发信号后轮询等待线程结束）"""
         if self._runner:
@@ -715,6 +718,7 @@ class GameAutoGUI(ctk.CTk):
         if self._runner and self._runner.is_running():
             self.after(300, self._poll_stop)
         else:
+            self.deiconify()
             self._start_btn.configure(state="normal")
             self._stop_btn.configure(state="disabled")
             self._status_label.configure(text="● 已停止", text_color=COLORS["text_dim"])
@@ -725,6 +729,7 @@ class GameAutoGUI(ctk.CTk):
 
     def _on_status_change(self, status):
         if status == "finished":
+            self.after(0, self.deiconify)
             self.after(0, lambda: self._start_btn.configure(state="normal"))
             self.after(0, lambda: self._stop_btn.configure(state="disabled"))
             self.after(0, lambda: self._status_label.configure(
