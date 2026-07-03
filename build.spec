@@ -41,6 +41,8 @@ a = Analysis(
         'requests',
         'pydirectinput',
         'pyautogui',
+        'numpy',
+        'cv2',
         'PIL',
         'PIL.Image',
         'PIL.ImageGrab',
