@@ -1,0 +1,32 @@
+# 配置文件（含本地路径和密钥）
+config.json
+
+# 日志目录
+DailyLogs/
+*.log
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+*.egg
+dist/
+build/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# 备份与归档
+backup/
+_old_archive.zip
+
+# 打包输出
+*.spec.bak
+
+# 系统文件
+Thumbs.db
+Desktop.ini

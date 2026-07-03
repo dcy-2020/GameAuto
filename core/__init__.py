@@ -1,0 +1,1 @@
+# GameAuto core modules
