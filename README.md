@@ -161,7 +161,7 @@ GameAuto/
 |------|------|------|
 | 鸣潮 | ok-ww | [ok-oldking/ok-wuthering-waves](https://github.com/ok-oldking/ok-wuthering-waves) |
 | 终末地 | MaaEnd | [MaaEnd/MaaEnd](https://github.com/MaaEnd/MaaEnd) |
-| 异环 | ok-nte | 基于 ok-script 框架开发 |
+| 异环 | ok-nte | [BnanZ0/ok-nte](https://github.com/BnanZ0/ok-nte) |
 
 > 使用前请先下载安装上述工具，并在 GUI 中填写对应的可执行文件路径。
 
