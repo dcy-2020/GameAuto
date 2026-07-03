@@ -39,22 +39,30 @@ class WwAccountSwitcher:
         res_key = _get_resolution_key()
         self.img_dir = os.path.join(base_img_dir, res_key)
 
-        # 2. 如果子目录不存在，从 zip 解压
-        zip_path = os.path.join(base_img_dir, f"{res_key}.zip")
-        if not os.path.exists(self.img_dir) and os.path.exists(zip_path):
-            print(f"📦 首次使用，正在解压 {res_key} 分辨率图包...")
-            try:
-                os.makedirs(self.img_dir, exist_ok=True)
-                with zipfile.ZipFile(zip_path, 'r') as zf:
-                    zf.extractall(self.img_dir)
-                print(f"✅ 已解压到 {self.img_dir}")
-            except Exception as e:
-                print(f"⚠️ 解压失败: {e}，回退到基础目录")
+        # 2. 打包后 _MEIPASS 只读，直接用基础目录（PNG 已在内）
+        if getattr(sys, 'frozen', False):
+            if not os.path.exists(self.img_dir):
+                print(f"⏩ 打包环境，使用基础图包目录: {base_img_dir}")
+                self.img_dir = base_img_dir
+        elif not os.path.exists(self.img_dir):
+            # 源码运行：尝试从 zip 解压对应分辨率图包
+            zip_path = os.path.join(base_img_dir, f"{res_key}.zip")
+            if os.path.exists(zip_path):
+                print(f"📦 首次使用，正在解压 {res_key} 分辨率图包...")
+                try:
+                    os.makedirs(self.img_dir, exist_ok=True)
+                    with zipfile.ZipFile(zip_path, 'r') as zf:
+                        zf.extractall(self.img_dir)
+                    print(f"✅ 已解压到 {self.img_dir}")
+                except Exception as e:
+                    print(f"⚠️ 解压失败: {e}，回退到基础目录")
+                    self.img_dir = base_img_dir
+            else:
                 self.img_dir = base_img_dir
 
-        # 3. 兜底：如果还是没有，用基础目录（兼容旧版不分子目录的情况）
+        # 3. 兜底
         if not os.path.exists(self.img_dir):
-            print(f"⚠️ 警告: 找不到图片文件夹 {self.img_dir}，使用 {base_img_dir}")
+            print(f"⚠️ 找不到图片文件夹 {self.img_dir}，使用 {base_img_dir}")
             self.img_dir = base_img_dir
 
     def _get_img_path(self, img_name):
