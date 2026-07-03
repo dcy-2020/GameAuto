@@ -7,6 +7,12 @@ import sys
 import os
 import ctypes
 
+# 必须在任何 GUI / 截图操作前调用，否则 PyInstaller 打包后 DPI 虚拟化导致模板匹配失败
+try:
+    ctypes.windll.user32.SetProcessDPIAware()
+except Exception:
+    pass
+
 
 def is_admin() -> bool:
     try:
