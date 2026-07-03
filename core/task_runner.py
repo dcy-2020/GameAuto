@@ -134,7 +134,7 @@ class TaskRunner:
         return None
 
     def _run_ww_task(self, logger, state, ai_client, retry_count: int, program_deadline: float) -> bool:
-        """单次运行 ok-ww 任务"""
+        """单次运行 ok-ww 任务 — 严格按照原 AutoGameDaily.py 逻辑"""
         state.ww_analyzer.reset_for_new_run()
         cfg = self.config
 
@@ -154,9 +154,9 @@ class TaskRunner:
 
         run_mode = cfg.get("okww_run_mode", 1)
         logger.log(f"🚀 启动 ok-ww.exe (模式 -t {run_mode})")
+        os.chdir(cfg["okww_path"])
         state.current_process = subprocess.Popen(
             [cfg["okww_exe"], "-t", str(run_mode), "-e"],
-            cwd=cfg["okww_path"],
             creationflags=subprocess.CREATE_NO_WINDOW,
         )
 
@@ -167,71 +167,84 @@ class TaskRunner:
         start_time = time.time()
         state.ww_analyzer._ai_attempt_count = 0
 
-        try:
-            while True:
-                if self._check_stop():
-                    logger.log("⏹️ [WW] 用户中断")
-                    return False
-                self._sleep(cfg["watchdog_interval"])
+        while True:
+            if self._check_stop():
+                logger.log("⏹️ [WW] 用户中断")
+                if state.current_process:
+                    state.current_process.kill()
+                smart_cleanup(cfg, logger, ["ok-ww.exe"], ww_keywords)
+                return False
+            self._sleep(cfg["watchdog_interval"])
 
-                if time.time() > program_deadline:
-                    logger.log("⏰ 程序总时长超限，强制结束本任务", level="ERROR")
-                    return False
+            # 全局超时
+            if time.time() > program_deadline:
+                logger.log("⏰ 程序总时长超限，强制结束本任务", level="ERROR")
+                if state.current_process:
+                    state.current_process.kill()
+                smart_cleanup(cfg, logger, ["ok-ww.exe"], ww_keywords)
+                return False
 
-                if time.time() - start_time > cfg["global_task_timeout"]:
-                    logger.log("⏰ 全局超时，强制终止", level="ERROR")
-                    return False
+            if time.time() - start_time > cfg["global_task_timeout"]:
+                logger.log("⏰ 全局超时，强制终止", level="ERROR")
+                if state.current_process:
+                    state.current_process.kill()
+                smart_cleanup(cfg, logger, ["ok-ww.exe"], ww_keywords)
+                return False
 
-                process_running = state.current_process.poll() is None
-                result = state.ww_analyzer.analyze(process_running, cfg["okww_log_dir"])
+            process_running = state.current_process.poll() is None
+            result = state.ww_analyzer.analyze(process_running, cfg["okww_log_dir"])
 
-                if result.status == TaskStatus.SUCCESS:
-                    logger.log("✅ 单次鸣潮清理任务完成")
+            if result.status == TaskStatus.SUCCESS:
+                logger.log("✅ 单次鸣潮清理任务完成")
+                smart_cleanup(cfg, logger, ["ok-ww.exe"], ww_keywords)
+                return True
+            elif result.status == TaskStatus.FAILED:
+                if "疑似切号失败" in result.error_message and retry_count == cfg["ww_max_retries"]:
+                    logger.log("⚠️ 已达最大重试次数，该账号可能真实无体力，妥协视为成功")
+                    state.ww_analyzer.status = TaskStatus.SUCCESS
+                    state.ww_analyzer.error_message = ""
+                    state.ww_analyzer.finish_event("success", "", time.time())
+                    smart_cleanup(cfg, logger, ["ok-ww.exe"], ww_keywords)
                     return True
-                elif result.status == TaskStatus.FAILED:
-                    if "疑似切号失败" in result.error_message and retry_count == cfg["ww_max_retries"]:
-                        logger.log("⚠️ 已达最大重试次数，该账号可能真实无体力，妥协视为成功")
-                        state.ww_analyzer.status = TaskStatus.SUCCESS
-                        state.ww_analyzer.error_message = ""
-                        state.ww_analyzer.finish_event("success", "", time.time())
-                        return True
-                    logger.log(f"❌ 鸣潮任务失败: {result.error_message}")
-                    state.ww_analyzer.finish_event("failed", "任务异常失败", time.time())
-                    return False
+                logger.log(f"❌ 鸣潮任务失败: {result.error_message}")
+                state.ww_analyzer.finish_event("failed", "任务异常失败", time.time())
+                smart_cleanup(cfg, logger, ["ok-ww.exe"], ww_keywords)
+                return False
 
-                # AI 异常处理
-                if cfg.get("enable_ai_assist", False) and ai_client is not None:
-                    if state.ww_analyzer.is_ai_trigger_timeout(cfg):
-                        logger.log("⏳ 日志超时，疑似卡在未知弹窗，尝试AI自救...")
-                        if state.ww_analyzer._ai_attempt_count >= cfg.get("ai_max_attempts", 10):
-                            logger.log("❌ AI尝试次数已达上限，放弃并执行清理")
-                            return False
-                        state.ww_analyzer._ai_attempt_count += 1
-
-                        activate_target_window(["鸣潮", "wuthering"], cfg)
-                        self._sleep(0.3)
-                        screenshot_b64 = ai_client.capture_screen()
-
-                        if screenshot_b64:
-                            context = f"鸣潮日常，账号 {state.ww_analyzer.current_account}，进度 {state.ww_analyzer.progress}/{state.ww_analyzer.total}"
-                            action = ai_client.ask_for_action(screenshot_b64, context)
-                            if action and ai_client.execute_action(action):
-                                state.ww_analyzer.last_log_time = time.time()
-                                continue
-                            else:
-                                logger.log("⚠️ AI无有效动作，继续等待")
-                        else:
-                            logger.log("⚠️ 截图失败，跳过AI")
-
+            # AI 异常处理 — 使用 is_log_timeout 触发（与原版一致）
+            if cfg.get("enable_ai_assist", False) and ai_client is not None:
                 if state.ww_analyzer.is_log_timeout(cfg):
-                    logger.log("⚠️ 日志超时，且AI未能恢复，执行清理", level="WARN")
-                    return False
-        finally:
-            safe_kill_process(state.current_process)
-            smart_cleanup(cfg, logger, ["ok-ww.exe"], ww_keywords)
+                    logger.log("⏳ 日志超时，疑似卡在未知弹窗，尝试AI自救...")
+                    if state.ww_analyzer._ai_attempt_count >= cfg.get("ai_max_attempts", 10):
+                        logger.log("❌ AI尝试次数已达上限，放弃并执行清理")
+                        smart_cleanup(cfg, logger, ["ok-ww.exe"], ww_keywords)
+                        return False
+                    state.ww_analyzer._ai_attempt_count += 1
+
+                    activate_target_window(["鸣潮", "wuthering"], cfg)
+                    self._sleep(0.3)
+                    screenshot_b64 = ai_client.capture_screen()
+
+                    if screenshot_b64:
+                        context = f"鸣潮日常，账号 {state.ww_analyzer.current_account}，进度 {state.ww_analyzer.progress}/{state.ww_analyzer.total}"
+                        action = ai_client.ask_for_action(screenshot_b64, context)
+                        if action and ai_client.execute_action(action):
+                            state.ww_analyzer.last_log_time = time.time()
+                            continue
+                        else:
+                            logger.log("⚠️ AI无有效动作，继续等待")
+                    else:
+                        logger.log("⚠️ 截图失败，跳过AI")
+
+            if state.ww_analyzer.is_log_timeout(cfg):
+                logger.log("⚠️ 日志超时，且AI未能恢复，执行清理", level="WARN")
+                if state.current_process:
+                    state.current_process.kill()
+                smart_cleanup(cfg, logger, ["ok-ww.exe"], ww_keywords)
+                return False
 
     def _run_ef_task(self, logger, state, ai_client, retry_count: int, program_deadline: float) -> bool:
-        """单次运行 MaaEnd 任务"""
+        """单次运行 MaaEnd 任务 — 严格按照原 AutoGameDaily.py 逻辑"""
         state.ef_analyzer.reset()
         cfg = self.config
 
@@ -243,74 +256,86 @@ class TaskRunner:
         clear_logs(cfg["maaend_log_dir"])
 
         logger.log("🚀 启动 MaaEnd.exe")
+        os.chdir(cfg["maaend_path"])
         state.current_process = subprocess.Popen(
             [cfg["maaend_exe"], "--autostart", "--instance", "全套日常", "--quit-after-run"],
-            cwd=cfg["maaend_path"],
             creationflags=subprocess.CREATE_NO_WINDOW,
         )
         self._sleep(cfg.get("process_start_wait", 8))
         logger.log("🐶 看门狗已启动...")
 
         start_time = time.time()
-        try:
-            while True:
-                if self._check_stop():
-                    logger.log("⏹️ [EF] 用户中断")
-                    return False
-                self._sleep(cfg["watchdog_interval"])
+        while True:
+            if self._check_stop():
+                logger.log("⏹️ [EF] 用户中断")
+                if state.current_process:
+                    state.current_process.kill()
+                return False
+            self._sleep(cfg["watchdog_interval"])
 
-                if time.time() > program_deadline:
-                    logger.log("⏰ 程序总时长超限，强制结束本任务", level="ERROR")
-                    return False
+            if time.time() > program_deadline:
+                logger.log("⏰ 程序总时长超限，强制结束本任务", level="ERROR")
+                if state.current_process:
+                    state.current_process.kill()
+                smart_cleanup(cfg, logger, ["MaaEnd.exe"], ef_keywords)
+                return False
 
-                if time.time() - start_time > cfg["global_task_timeout"]:
-                    logger.log("⏰ 全局超时，强制终止", level="ERROR")
-                    return False
+            if time.time() - start_time > cfg["global_task_timeout"]:
+                logger.log("⏰ 全局超时，强制终止", level="ERROR")
+                if state.current_process:
+                    state.current_process.kill()
+                smart_cleanup(cfg, logger, ["MaaEnd.exe"], ef_keywords)
+                return False
 
-                process_running = state.current_process.poll() is None
-                result = state.ef_analyzer.analyze(process_running, cfg["maaend_log_dir"])
+            process_running = state.current_process.poll() is None
+            result = state.ef_analyzer.analyze(process_running, cfg["maaend_log_dir"])
 
-                if result.status == TaskStatus.SUCCESS:
-                    logger.log("✅ 终末地任务完成")
-                    state.ef_analyzer.finish_event("success", "", time.time())
-                    return True
-                elif result.status == TaskStatus.FAILED:
-                    logger.log("❌ 终末地任务失败")
-                    return False
+            if result.status == TaskStatus.SUCCESS:
+                logger.log("✅ 终末地任务完成")
+                state.ef_analyzer.finish_event("success", "", time.time())
+                smart_cleanup(cfg, logger, ["MaaEnd.exe"], ef_keywords)
+                return True
+            elif result.status == TaskStatus.FAILED:
+                logger.log("❌ 终末地任务失败")
+                smart_cleanup(cfg, logger, ["MaaEnd.exe"], ef_keywords)
+                return False
 
-                # AI 异常处理
-                if cfg.get("enable_ai_assist", False) and ai_client is not None:
-                    if state.ef_analyzer.is_ai_trigger_timeout(cfg):
-                        logger.log("⏳ [EF] 日志超时，疑似卡在未知弹窗，尝试AI自救...")
-                        if state.ef_analyzer._ai_attempt_count >= cfg.get("ai_max_attempts", 10):
-                            logger.log("❌ [EF] AI尝试次数已达上限，放弃并执行清理")
-                            return False
-                        state.ef_analyzer._ai_attempt_count += 1
-
-                        activate_target_window(["终末地", "endfield"], cfg)
-                        self._sleep(0.3)
-                        screenshot_b64 = ai_client.capture_screen()
-
-                        if screenshot_b64:
-                            context = f"终末地日常，当前进度 {state.ef_analyzer.progress}/{state.ef_analyzer.total}"
-                            action = ai_client.ask_for_action(screenshot_b64, context)
-                            if action and ai_client.execute_action(action):
-                                state.ef_analyzer.last_log_time = time.time()
-                                continue
-                            else:
-                                logger.log("⚠️ [EF] AI无有效动作，继续等待")
-                        else:
-                            logger.log("⚠️ [EF] 截图失败，跳过AI")
-
+            # AI 异常处理 — 使用 is_log_timeout 触发（与原版一致）
+            if cfg.get("enable_ai_assist", False) and ai_client is not None:
                 if state.ef_analyzer.is_log_timeout(cfg):
-                    logger.log("⚠️ [EF] 日志超时，且AI未能恢复，执行清理", level="WARN")
-                    return False
-        finally:
-            safe_kill_process(state.current_process)
-            smart_cleanup(cfg, logger, ["MaaEnd.exe"], ef_keywords)
+                    logger.log("⏳ [EF] 日志超时，疑似卡在未知弹窗，尝试AI自救...")
+                    if state.ef_analyzer._ai_attempt_count >= cfg.get("ai_max_attempts", 10):
+                        logger.log("❌ [EF] AI尝试次数已达上限，放弃并执行清理")
+                        if state.current_process:
+                            state.current_process.kill()
+                        smart_cleanup(cfg, logger, ["MaaEnd.exe"], ef_keywords)
+                        return False
+                    state.ef_analyzer._ai_attempt_count += 1
+
+                    activate_target_window(["终末地", "endfield"], cfg)
+                    self._sleep(0.3)
+                    screenshot_b64 = ai_client.capture_screen()
+
+                    if screenshot_b64:
+                        context = f"终末地日常，当前进度 {state.ef_analyzer.progress}/{state.ef_analyzer.total}"
+                        action = ai_client.ask_for_action(screenshot_b64, context)
+                        if action and ai_client.execute_action(action):
+                            state.ef_analyzer.last_log_time = time.time()
+                            continue
+                        else:
+                            logger.log("⚠️ [EF] AI无有效动作，继续等待")
+                    else:
+                        logger.log("⚠️ [EF] 截图失败，跳过AI")
+
+            if state.ef_analyzer.is_log_timeout(cfg):
+                logger.log("⚠️ [EF] 日志超时，且AI未能恢复，执行清理", level="WARN")
+                if state.current_process:
+                    state.current_process.kill()
+                smart_cleanup(cfg, logger, ["MaaEnd.exe"], ef_keywords)
+                return False
 
     def _run_nte_task(self, logger, state, ai_client, retry_count: int, program_deadline: float) -> bool:
-        """单次运行 ok-nte 任务"""
+        """单次运行 ok-nte 任务 — 严格按照原 AutoGameDaily.py 逻辑"""
         state.nte_analyzer.reset()
         cfg = self.config
 
@@ -321,77 +346,66 @@ class TaskRunner:
         smart_cleanup(cfg, logger, ["ok-nte.exe", "NTE.exe"], nte_keywords)
         clear_logs(cfg.get("oknte_log_dir", ""))
 
-        current_oknte_log = get_latest_oknte_log(cfg.get("oknte_log_dir", ""))
-        if current_oknte_log:
-            state.nte_analyzer.seek_to_end(current_oknte_log)
-            logger.log("🔍 [NTE] 已屏蔽历史日志，准备捕捉本次运行")
-        else:
-            logger.log("⚠️ [NTE] 未找到 ok-nte 日志文件，将从头开始读取", level="WARN")
-
         logger.log("🚀 启动 ok-nte.exe (模式 -t 2)")
-        state.current_process = subprocess.Popen(
+        os.chdir(cfg["oknte_path"])
+        subprocess.Popen(
             [cfg["oknte_exe"], "-t", "2", "-e"],
-            cwd=cfg["oknte_path"],
             creationflags=subprocess.CREATE_NO_WINDOW,
         )
 
         logger.log("🐶 日志监控看门狗已上线...")
         start_time = time.time()
 
-        try:
-            while True:
-                if self._check_stop():
-                    logger.log("⏹️ [NTE] 用户中断")
-                    return False
-                self._sleep(cfg["watchdog_interval"])
+        while True:
+            if self._check_stop():
+                logger.log("⏹️ [NTE] 用户中断")
+                return False
+            self._sleep(cfg["watchdog_interval"])
 
-                if time.time() > program_deadline:
-                    logger.log("⏰ 程序总时长超限，强制结束本任务", level="ERROR")
-                    return False
+            result = state.nte_analyzer.analyze(cfg.get("oknte_log_dir", ""))
 
-                if time.time() - start_time > cfg["global_task_timeout"]:
-                    logger.log("⏰ [NTE] 任务总时长超限，强制终止", level="ERROR")
-                    return False
+            if result.status == TaskStatus.SUCCESS:
+                logger.log("✅ 在日志中捕捉到退出锚点，异环任务顺利完成！")
+                return True
+            elif result.status == TaskStatus.FAILED:
+                logger.log(f"❌ 异环任务失败: {result.error_message}")
+                smart_cleanup(cfg, logger, ["ok-nte.exe", "NTE.exe", "HTGame.exe"], nte_keywords)
+                return False
 
-                result = state.nte_analyzer.analyze(cfg.get("oknte_log_dir", ""))
-
-                if result.status == TaskStatus.SUCCESS:
-                    logger.log("✅ 在日志中捕捉到退出锚点，异环任务顺利完成！")
-                    return True
-                elif result.status == TaskStatus.FAILED:
-                    logger.log(f"❌ 异环任务失败: {result.error_message}")
-                    return False
-
-                # AI 异常处理
-                if cfg.get("enable_ai_assist", False) and ai_client is not None:
-                    if state.nte_analyzer.is_ai_trigger_timeout(cfg):
-                        logger.log("⏳ [NTE] 日志超时，疑似卡在未知弹窗，尝试AI自救...")
-                        if state.nte_analyzer._ai_attempt_count >= cfg.get("ai_max_attempts", 10):
-                            logger.log("❌ [NTE] AI尝试次数已达上限，放弃并执行清理")
-                            return False
-                        state.nte_analyzer._ai_attempt_count += 1
-
-                        activate_target_window(["异环", "NTE.exe"], cfg)
-                        self._sleep(0.3)
-                        screenshot_b64 = ai_client.capture_screen()
-
-                        if screenshot_b64:
-                            context = "异环日常"
-                            action = ai_client.ask_for_action(screenshot_b64, context)
-                            if action and ai_client.execute_action(action):
-                                state.nte_analyzer.last_log_time = time.time()
-                                continue
-                            else:
-                                logger.log("⚠️ [NTE] AI无有效动作，继续等待")
-                        else:
-                            logger.log("⚠️ [NTE] 截图失败，跳过AI")
-
+            # AI 异常处理 — 使用 is_log_timeout 触发（与原版一致）
+            if cfg.get("enable_ai_assist", False) and ai_client is not None:
                 if state.nte_analyzer.is_log_timeout(cfg):
-                    logger.log(f"⚠️ [NTE] 日志已超过 {cfg.get('log_timeout', 300)} 秒未更新，且AI未能恢复，判定框架卡死", level="WARN")
-                    return False
-        finally:
-            safe_kill_process(state.current_process)
-            smart_cleanup(cfg, logger, ["ok-nte.exe", "NTE.exe", "HTGame.exe"], nte_keywords)
+                    logger.log("⏳ [NTE] 日志超时，疑似卡在未知弹窗，尝试AI自救...")
+                    if state.nte_analyzer._ai_attempt_count >= cfg.get("ai_max_attempts", 10):
+                        logger.log("❌ [NTE] AI尝试次数已达上限，放弃并执行清理")
+                        smart_cleanup(cfg, logger, ["ok-nte.exe", "NTE.exe", "HTGame.exe"], nte_keywords)
+                        return False
+                    state.nte_analyzer._ai_attempt_count += 1
+
+                    activate_target_window(["异环", "NTE.exe"], cfg)
+                    self._sleep(0.3)
+                    screenshot_b64 = ai_client.capture_screen()
+
+                    if screenshot_b64:
+                        context = "异环日常"
+                        action = ai_client.ask_for_action(screenshot_b64, context)
+                        if action and ai_client.execute_action(action):
+                            state.nte_analyzer.last_log_time = time.time()
+                            continue
+                        else:
+                            logger.log("⚠️ [NTE] AI无有效动作，继续等待")
+                    else:
+                        logger.log("⚠️ [NTE] 截图失败，跳过AI")
+
+            if state.nte_analyzer.is_log_timeout(cfg):
+                logger.log(f"⚠️ [NTE] 日志已超过 {cfg.get('log_timeout', 300)} 秒未更新，且AI未能恢复，判定框架卡死", level="WARN")
+                smart_cleanup(cfg, logger, ["ok-nte.exe", "NTE.exe", "HTGame.exe"], nte_keywords)
+                return False
+
+            if time.time() - start_time > cfg["global_task_timeout"]:
+                logger.log("⏰ [NTE] 任务总时长超限，强制终止", level="ERROR")
+                smart_cleanup(cfg, logger, ["ok-nte.exe", "NTE.exe", "HTGame.exe"], nte_keywords)
+                return False
 
     def _run_loop(self):
         """主执行循环 - 重构自 AutoGameDaily.main()"""
