@@ -62,26 +62,52 @@ def ensure_esc_menu(config: dict, logger, switcher=None, ai_client=None, max_ai_
         if switcher is None:
             logger.log("⚠️ 无 AI 也无 switcher，无法确认 ESC 菜单")
             return True
+
+        # 找到游戏窗口 HWND，用 PostMessage 直接注入 ESC 键（绕过前台锁）
+        WM_KEYDOWN = 0x0100
+        WM_KEYUP = 0x0101
+        VK_ESCAPE = 0x1B
+
         for _ in range(max_ai_attempts):
-            activate_target_window(["鸣潮", "wuthering"], config)
-            import pydirectinput
-            pydirectinput.keyDown('esc')
+            windows = iter_windows_by_title(["鸣潮", "wuthering"])
+            if not windows:
+                logger.log("⚠️ 未找到游戏窗口，等待重试...")
+                time.sleep(2)
+                continue
+
+            hwnd = windows[0][0]
+            # 激活窗口（尽力而为）
+            set_window_foreground(hwnd, config)
+            time.sleep(0.3)
+
+            # PostMessage 注入 ESC（不依赖前台窗口）
+            ctypes.windll.user32.PostMessageW(hwnd, WM_KEYDOWN, VK_ESCAPE, 0)
             time.sleep(0.1)
-            pydirectinput.keyUp('esc')
+            ctypes.windll.user32.PostMessageW(hwnd, WM_KEYUP, VK_ESCAPE, 0)
             time.sleep(2)
+
             if switcher.is_on_esc_menu():
                 return True
         logger.log("❌ 无 AI 时多次尝试未能进入 ESC 菜单")
         return False
 
+    WM_KEYDOWN = 0x0100
+    WM_KEYUP = 0x0101
+    VK_ESCAPE = 0x1B
+
     for i in range(max_ai_attempts):
-        activate_target_window(["鸣潮", "wuthering"], config)
-        time.sleep(0.5)
-        import pydirectinput
-        pydirectinput.keyDown('esc')
-        time.sleep(0.1)
-        pydirectinput.keyUp('esc')
-        time.sleep(2)
+        windows = iter_windows_by_title(["鸣潮", "wuthering"])
+        if windows:
+            hwnd = windows[0][0]
+            set_window_foreground(hwnd, config)
+            time.sleep(0.5)
+            ctypes.windll.user32.PostMessageW(hwnd, WM_KEYDOWN, VK_ESCAPE, 0)
+            time.sleep(0.1)
+            ctypes.windll.user32.PostMessageW(hwnd, WM_KEYUP, VK_ESCAPE, 0)
+            time.sleep(2)
+        else:
+            activate_target_window(["鸣潮", "wuthering"], config)
+            time.sleep(2)
 
         screenshot_b64 = ai_client.capture_screen()
         if not screenshot_b64:
