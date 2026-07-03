@@ -167,10 +167,15 @@ class WwAccountSwitcher:
     
     def is_on_esc_menu(self):
         """快速检查 ESC 菜单界面是否存在（通过检测退出按钮）"""
+        img_path = self._get_img_path("power_btn.png")
         try:
-            img_path = self._get_img_path("power_btn.png")
-            return pyautogui.locateOnScreen(img_path, confidence=0.85) is not None
-        except:
+            result = pyautogui.locateOnScreen(img_path, confidence=0.85)
+            if result is None:
+                # 降级：不设 confidence 再试一次
+                result = pyautogui.locateOnScreen(img_path)
+            return result is not None
+        except Exception as e:
+            print(f"⚠️ is_on_esc_menu 异常: {type(e).__name__}: {e}")
             return False
 
     # def switch_account(self, target_account_suffix, known_accounts=["7267", "8071", "8701"]):

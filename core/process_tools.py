@@ -86,9 +86,18 @@ def ensure_esc_menu(config: dict, logger, switcher=None, ai_client=None, max_ai_
             ctypes.windll.user32.PostMessageW(hwnd, WM_KEYUP, VK_ESCAPE, 0)
             time.sleep(2)
 
-            if switcher.is_on_esc_menu():
+            # 诊断日志
+            img_path = os.path.join(switcher.img_dir, "power_btn.png")
+            file_ok = "存在" if os.path.exists(img_path) else "缺失"
+            try:
+                is_menu = switcher.is_on_esc_menu()
+            except Exception as ex:
+                logger.log(f"🔍 ESC 检测异常: {ex}", level="ERROR")
+                is_menu = False
+            logger.log(f"🔍 尝试 ESC | 文件:{file_ok} | 匹配:{'✅' if is_menu else '❌'}")
+            if is_menu:
                 return True
-        logger.log("❌ 无 AI 时多次尝试未能进入 ESC 菜单")
+        logger.log(f"❌ 无 AI 时 {max_ai_attempts} 次尝试未能进入 ESC 菜单 | 图包路径: {switcher.img_dir}", level="ERROR")
         return False
 
     WM_KEYDOWN = 0x0100
