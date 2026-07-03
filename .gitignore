@@ -31,6 +31,16 @@ Switcher/imgs/2K/
 # 打包输出
 *.spec.bak
 
+# Claude 内部文件
+.claude/
+
+# 发布包（仅本地）
+GameAuto_v2.0.zip
+GameAuto_source.zip
+
+# 配置备份
+*.bak
+
 # 系统文件
 Thumbs.db
 Desktop.ini

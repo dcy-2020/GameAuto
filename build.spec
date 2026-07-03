@@ -4,16 +4,13 @@
 import sys
 import os
 from pathlib import Path
+from PyInstaller.utils.hooks import collect_submodules, collect_all
 
-# 不打包 opencv/numpy — pyautogui 纯 Python 模式完全够用且无依赖
-
-# 项目根目录（SPECPATH 是 .spec 文件所在目录）
+# 项目根目录
 PROJECT_ROOT = Path(SPECPATH)
 
-# 构建 datas 列表（使用 os.path.join 确保路径正确）
+# 构建 datas 列表
 datas_list = []
-
-# Switcher 图片目录
 switcher_imgs = os.path.join(str(PROJECT_ROOT), 'Switcher', 'imgs')
 if os.path.isdir(switcher_imgs):
     for f in os.listdir(switcher_imgs):
@@ -21,21 +18,19 @@ if os.path.isdir(switcher_imgs):
         if os.path.isfile(src):
             datas_list.append((src, os.path.join('Switcher', 'imgs')))
 
-# 默认配置
 default_config = os.path.join(str(PROJECT_ROOT), 'resources', 'default_config.json')
 if os.path.isfile(default_config):
     datas_list.append((default_config, 'resources'))
 
-# 图标（如果有的话）
-icon_path = os.path.join(str(PROJECT_ROOT), 'resources', 'icon.ico')
-if not os.path.isfile(icon_path):
-    icon_path = None
+# collect_all 确保 numpy+opencv 的 .pyd/.dll 全部打包
+_numpy = collect_all('numpy')
+_cv2 = collect_all('cv2')
 
 a = Analysis(
     ['main.py'],
     pathex=[str(PROJECT_ROOT)],
-    binaries=[],
-    datas=datas_list,
+    binaries=_numpy[1] + _cv2[1],
+    datas=datas_list + _numpy[0] + _cv2[0],
     hiddenimports=[
         'customtkinter',
         'darkdetect',
@@ -60,14 +55,13 @@ a = Analysis(
         'Switcher.WwAccountSwitcher',
         'config_manager',
         'gui',
-    ],
+    ] + _numpy[2] + _cv2[2],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
     excludes=[
         'tkinter.test',
         'matplotlib',
-        'numpy',
         'pandas',
         'scipy',
     ],
@@ -89,11 +83,11 @@ exe = EXE(
     upx=True,
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=True,   # pyautogui 截图依赖控制台子系统
+    console=True,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=icon_path,
+    icon=None,
 )
