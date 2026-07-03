@@ -39,9 +39,11 @@ class WwAccountSwitcher:
         res_key = _get_resolution_key()
         self.img_dir = os.path.join(base_img_dir, res_key)
 
-        # 2. 打包后 _MEIPASS 只读 → 解压到 exe 旁的 writable 目录
+        # 2. 打包后 _MEIPASS 只读 → 解压到 exe 同级可写目录
         if getattr(sys, 'frozen', False):
-            writable_base = os.path.join(os.path.dirname(sys.executable), img_folder_name)
+            # 仅用文件夹名（忽略绝对路径前缀），确保写到 exe 旁而非 _MEIPASS
+            folder_name = os.path.basename(base_img_dir.rstrip("/\\"))
+            writable_base = os.path.join(os.path.dirname(sys.executable), folder_name)
             writable_res = os.path.join(writable_base, res_key)
             zip_path = os.path.join(base_img_dir, f"{res_key}.zip")
             if not os.path.exists(writable_res) and os.path.exists(zip_path):
