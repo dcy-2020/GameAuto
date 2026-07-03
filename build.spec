@@ -1,9 +1,14 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""PyInstaller 打包配置 - 单文件 exe，隐藏控制台"""
+"""PyInstaller 打包配置 - 单文件 exe"""
 
 import sys
 import os
 from pathlib import Path
+
+# 强制收集 numpy 和 opencv 的全部子模块（解决 "OpenCV requires numpy" 运行时错误）
+from PyInstaller.utils.hooks import collect_submodules
+_numpy_imports = collect_submodules('numpy')
+_cv2_imports = collect_submodules('cv2')
 
 # 项目根目录（SPECPATH 是 .spec 文件所在目录）
 PROJECT_ROOT = Path(SPECPATH)
@@ -41,8 +46,6 @@ a = Analysis(
         'requests',
         'pydirectinput',
         'pyautogui',
-        'numpy',
-        'cv2',
         'PIL',
         'PIL.Image',
         'PIL.ImageGrab',
@@ -60,7 +63,7 @@ a = Analysis(
         'Switcher.WwAccountSwitcher',
         'config_manager',
         'gui',
-    ],
+    ] + _numpy_imports + _cv2_imports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
