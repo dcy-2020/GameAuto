@@ -5,12 +5,7 @@ import sys
 import os
 from pathlib import Path
 
-# 强制收集 numpy 和 opencv 的全部二进制和子模块
-from PyInstaller.utils.hooks import collect_submodules, collect_dynamic_libs
-_numpy_imports = collect_submodules('numpy')
-_cv2_imports = collect_submodules('cv2')
-_numpy_dlls = collect_dynamic_libs('numpy')
-_cv2_dlls = collect_dynamic_libs('cv2')
+# 不打包 opencv/numpy — pyautogui 纯 Python 模式完全够用且无依赖
 
 # 项目根目录（SPECPATH 是 .spec 文件所在目录）
 PROJECT_ROOT = Path(SPECPATH)
@@ -39,7 +34,7 @@ if not os.path.isfile(icon_path):
 a = Analysis(
     ['main.py'],
     pathex=[str(PROJECT_ROOT)],
-    binaries=_numpy_dlls + _cv2_dlls,
+    binaries=[],
     datas=datas_list,
     hiddenimports=[
         'customtkinter',
@@ -65,7 +60,7 @@ a = Analysis(
         'Switcher.WwAccountSwitcher',
         'config_manager',
         'gui',
-    ] + _numpy_imports + _cv2_imports,
+    ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -75,6 +70,8 @@ a = Analysis(
         'numpy',
         'pandas',
         'scipy',
+        'cv2',
+        'numpy',
     ],
     noarchive=False,
 )
