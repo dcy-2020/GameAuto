@@ -1,6 +1,7 @@
 """AI 多模态异常处理模块"""
 import base64
 import io
+import json
 import re
 import time
 
@@ -117,10 +118,10 @@ class AIAssistant:
                     raw_json = re.sub(r'"x"\s*:\s*(\d+)\s*,\s*(\d+)', r'"x": \1, "y": \2', raw_json)
                     raw_json = re.sub(r'([{,])\s*([a-zA-Z_]+)\s*:', r'\1"\2":', raw_json)
                     try:
-                        action = __import__('json').loads(raw_json)
+                        action = json.loads(raw_json)
                         self._log(f"AI返回动作: {action}", "INFO")
                         return action
-                    except __import__('json').JSONDecodeError:
+                    except json.JSONDecodeError:
                         act_match = re.search(r'"action"\s*:\s*"(click|skip|key)"', raw_json)
                         if act_match:
                             act_type = act_match.group(1)

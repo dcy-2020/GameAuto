@@ -100,7 +100,7 @@ class BaseLogAnalyzer:
         if match:
             try:
                 return datetime.strptime(match.group(1), "%Y-%m-%d %H:%M:%S").timestamp()
-            except:
+            except Exception:
                 pass
         return None
 

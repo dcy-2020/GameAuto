@@ -87,7 +87,7 @@ def check_boot_environment_ready(config: dict, logger):
             if cpu_load > 30:
                 cpu_high = True
                 logger.log(f"⚠️ CPU负载过高({cpu_load}%)，等待中...", level="WARN")
-        except:
+        except Exception:
             pass
         if cpu_high:
             time.sleep(5)

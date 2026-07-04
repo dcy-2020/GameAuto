@@ -242,7 +242,7 @@ class GameAutoGUI(ctk.CTk):
         except ImportError as e:
             self._import_error = str(e)
 
-        self.title("🎮 GameAuto Daily v2.0")
+        self.title("🎮 GameAuto Daily v2.1")
         self.geometry("1600x900")
         self.minsize(1000, 650)
 

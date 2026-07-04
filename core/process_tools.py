@@ -1,6 +1,7 @@
 """窗口与进程工具模块"""
 import ctypes
 import os
+import subprocess
 import time
 from ctypes import wintypes
 from typing import List, Optional
@@ -44,7 +45,7 @@ def set_window_foreground(hwnd, config: dict):
         ctypes.windll.user32.SetFocus(hwnd)
         time.sleep(config.get("window_activate_wait", 2))
         return True
-    except:
+    except Exception:
         return False
 
 
@@ -212,7 +213,7 @@ def clear_logs(log_dir: str):
             file_path = os.path.join(log_dir, filename)
             try:
                 os.remove(file_path)
-            except:
+            except Exception:
                 pass
     time.sleep(1)
 
@@ -222,7 +223,7 @@ def is_process_running_by_name(exe_name: str) -> bool:
         try:
             if proc.info['name'] and proc.info['name'].lower() == exe_name.lower():
                 return True
-        except:
+        except Exception:
             pass
     return False
 
@@ -235,7 +236,7 @@ def safe_kill_process(proc) -> bool:
         proc.kill()
         try:
             proc.wait(timeout=5)
-        except __import__('subprocess').TimeoutExpired:
+        except subprocess.TimeoutExpired:
             pass
         return True
     except (ProcessLookupError, OSError, AttributeError):

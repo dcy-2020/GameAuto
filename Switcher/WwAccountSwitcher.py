@@ -10,7 +10,7 @@ def is_admin():
     """检查当前是否具备管理员权限"""
     try:
         return ctypes.windll.shell32.IsUserAnAdmin()
-    except:
+    except Exception:
         return False
 
 class WwAccountSwitcher:
@@ -115,7 +115,7 @@ class WwAccountSwitcher:
         try:
             img_path = self._get_img_path("power_btn.png")
             return pyautogui.locateOnScreen(img_path, confidence=0.85) is not None
-        except:
+        except Exception:
             return False
 
     def logout_from_esc_menu(self, known_accounts=["7267", "8071", "8701"]):

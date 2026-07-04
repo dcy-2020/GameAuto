@@ -16,7 +16,7 @@ class HistoryManager:
             try:
                 with open(self.history_file, 'r', encoding='utf-8') as f:
                     return json.load(f)
-            except:
+            except Exception:
                 pass
         return {
             "ww_failures": 0,

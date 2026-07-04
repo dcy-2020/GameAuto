@@ -43,13 +43,13 @@ class ReportLogger:
         if self.console_output:
             try:
                 print(full_message)
-            except:
+            except Exception:
                 pass
         # 通知 GUI
         if self._log_callback:
             try:
                 self._log_callback(full_message, level)
-            except:
+            except Exception:
                 pass
         self._flush()
 
@@ -64,7 +64,7 @@ class ReportLogger:
                 for line in self.log_buffer:
                     f.write(line + '\n')
             self.log_buffer = []
-        except:
+        except Exception:
             pass
 
     def get_full_log(self) -> str:
@@ -109,5 +109,5 @@ class ReportLogger:
                 dest = os.path.join(self.today_log_dir, f"oknte_{today_str}.log")
                 shutil.copy2(oknte_log, dest)
                 self.log(f"  ✅ ok-nte 日志已归档")
-        except:
+        except Exception:
             pass

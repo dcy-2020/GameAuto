@@ -10,15 +10,15 @@ import ctypes
 # 必须在任何 GUI / 截图操作前调用
 try:
     ctypes.windll.user32.SetProcessDPIAware()
-except Exception:
-    pass
+except Exception as e:
+    print(f"[WARN] SetProcessDPIAware 失败: {e}")
 
 # 强制初始化 numpy+opencv，确保 pyautogui 后续能正常使用 confidence 参数
 try:
     import numpy
     import cv2
-except Exception:
-    pass
+except Exception as e:
+    print(f"[WARN] numpy/opencv 初始化失败: {e}")
 
 
 def is_admin() -> bool:
