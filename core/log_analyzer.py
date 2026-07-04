@@ -183,10 +183,30 @@ class MaaEndLogAnalyzer(BaseLogAnalyzer):
             self.status = TaskStatus.FAILED
             self.error_message = "未找到运行日志"
             return self._build_result()
+
+        # 如果日志文件变了（MaaEnd 每次运行新文件），重置 seek 位置
+        if app_log_path and app_log_path not in self.file_states:
+            old_states = list(self.file_states.keys())
+            for old in old_states:
+                self.file_states.pop(old)
+            self.seek_to_end(app_log_path)
+            self.last_log_time = time.time()
+
         app_lines = self._read_new_lines(app_log_path)
         if app_lines:
             self._process_lines(app_lines)
+        # MaaEnd 完成后进程自动退出，此时如果 status 被 tasks-completed 置为 SUCCESS 则没问题
         if not process_running and self.status == TaskStatus.RUNNING:
+            # 再查一下是不是有更早的成功标记被漏掉了
+            if app_log_path:
+                try:
+                    with open(app_log_path, 'r', encoding='utf-8', errors='ignore') as f:
+                        full = f.read()
+                    if "kind: tasks-completed" in full or "Successfully" in full:
+                        self.status = TaskStatus.SUCCESS
+                        return self._build_result()
+                except Exception:
+                    pass
             self.status = TaskStatus.FAILED
             self.finish_event("failed", "进程意外终止", time.time())
             if not self.error_message:
