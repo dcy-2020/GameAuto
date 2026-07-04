@@ -202,7 +202,7 @@ class MaaEndLogAnalyzer(BaseLogAnalyzer):
                 try:
                     with open(app_log_path, 'r', encoding='utf-8', errors='ignore') as f:
                         full = f.read()
-                    if "kind: tasks-completed" in full or "Successfully" in full:
+                    if any(kw in full for kw in ["kind: tasks-completed", "成功", "自动执行任务完成"]):
                         self.status = TaskStatus.SUCCESS
                         return self._build_result()
                 except Exception:
@@ -247,7 +247,7 @@ class MaaEndLogAnalyzer(BaseLogAnalyzer):
                 if self.progress < len(self.ordered_tasks):
                     self.start_event(f"执行: {self.ordered_tasks[self.progress]}", line_time)
                 continue
-            if "kind: tasks-completed" in line:
+            if "kind: tasks-completed" in line or "自动执行任务完成" in line or "Successfully" in line:
                 self.finish_event("success", "", line_time)
                 self.status = TaskStatus.SUCCESS
                 self.progress = self.total
