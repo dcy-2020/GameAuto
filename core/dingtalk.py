@@ -59,6 +59,14 @@ def send_detailed_dingtalk_report(alarms, config: dict, state, logger=None):
     ef_status_icon = "🟢 **成功**" if state.ef_success else "🔴 **失败**"
     markdown_content += f"### 2. 终末地 (MaaEnd) - {ef_status_icon}\n"
     markdown_content += f"**节点进度**: {ef_res.progress}/{ef_res.total}\n\n"
+
+    # 任务编号清单
+    if ef_res.task_list:
+        markdown_content += "**任务明细**:\n"
+        for t in ef_res.task_list:
+            icon = "✅" if t["done"] else "⏳"
+            markdown_content += f"  {t['index']+1}. {icon} {t['name']}\n"
+        markdown_content += "\n"
     markdown_content += f"{ef_res.get_timeline_report()}\n"
     if ef_res.error_message:
         markdown_content += f"\n> **❌ 错误原因**: {ef_res.error_message}\n"

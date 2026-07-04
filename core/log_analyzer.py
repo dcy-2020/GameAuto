@@ -32,6 +32,7 @@ class TaskResult:
     error_message: str = ""
     warnings: List[str] = field(default_factory=list)
     timeline: List[TimelineEvent] = field(default_factory=list)
+    task_list: List[dict] = field(default_factory=list)  # MaaEnd 任务编号清单
 
     def get_timeline_report(self) -> str:
         report = []
@@ -164,10 +165,14 @@ class MaaEndLogAnalyzer(BaseLogAnalyzer):
         "DeliveryJobsMain": "转交委托",
         "AutoStockpileMain": "自动囤货",
         "SellProductMain": "售卖产品",
+        "SellProductSchedule": "售卖产品",
         "AutoStockStapleMain": "购买稳定物资",
+        "AutoStockStapleSchedule": "购买稳定物资",
         "CreditShoppingMain": "信用点购物",
         "DailyRewardStart": "领取邮件及日常奖励",
         "ProtocolSpaceEntry": "协议空间",
+        "ProtocolSpaceSchedule": "协议空间",
+        "AutoSellMain": "自动出售",
         "MXU_KILLPROC": "执行结束与游戏清理"
     }
 
@@ -260,10 +265,15 @@ class MaaEndLogAnalyzer(BaseLogAnalyzer):
                     self.finish_event("failed", "异常中断", line_time)
 
     def _build_result(self):
+        # 编号清单：把 ordered_tasks 加上完成状态
+        task_list = []
+        for i, name in enumerate(self.ordered_tasks):
+            done = i < self.progress
+            task_list.append({"index": i, "name": name, "done": done})
         return TaskResult(status=self.status, progress=self.progress,
                           total=self.total if self.total > 0 else 10,
                           error_message=self.error_message, warnings=self.warnings,
-                          timeline=self.timeline)
+                          timeline=self.timeline, task_list=task_list)
 
 
 # ==================== Ok-WW 分析器 ====================
