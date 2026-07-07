@@ -57,6 +57,7 @@ class WatchdogConfig:
     find_latest_log: callable # 返回最新日志文件路径
     ai_keywords: List[str]    # AI 激活窗口关键词
     ai_context_fn: callable   # 返回 AI 上下文字符串
+    post_start_activate_keywords: Optional[List[str]] = None  # 启动后激活窗口的关键词（None=不激活，WW 特有）
     special_failure_fn: Optional[callable] = None  # 自定义失败处理 (result, analyzer) -> bool
 
 
@@ -157,7 +158,8 @@ class TaskRunner:
 
     # ---------- 通用看门狗 ----------
 
-    def _run_with_watchdog(self, logger, wd: WatchdogConfig, retry_count: int, max_retries: int) -> bool:
+    def _run_with_watchdog(self, logger, wd: WatchdogConfig, retry_count: int, max_retries: int,
+                           state=None) -> bool:
         """通用的看门狗循环：清理 → 启动进程 → 监控日志 → AI 自救 → 清理退出。
 
         将 _run_ww_task / _run_ef_task / _run_nte_task 的共同逻辑合并至此。
@@ -167,6 +169,7 @@ class TaskRunner:
 
         # 循环内频繁读取的配置缓存到局部变量（避免每次迭代查字典）
         watchdog_interval = cfg["watchdog_interval"]
+        global_task_timeout = cfg["global_task_timeout"]
         ai_max_attempts = cfg.get("ai_max_attempts", 10)
         ai_assist_enabled = cfg.get("enable_ai_assist", False)
 
@@ -191,8 +194,15 @@ class TaskRunner:
             wd.cmd,
             creationflags=subprocess.CREATE_NO_WINDOW,
         )
+        if state is not None:
+            state.current_process = process
 
         self._sleep(cfg.get("process_start_wait", 8))
+
+        # 4. WW 特有：启动后将游戏窗口置前台，便于后续截图/模板匹配
+        if wd.post_start_activate_keywords:
+            activate_target_window(wd.post_start_activate_keywords, cfg)
+
         logger.log("🐶 看门狗已启动...")
 
         wd.analyzer._ai_attempt_count = 0
@@ -202,6 +212,8 @@ class TaskRunner:
             if process.poll() is None:
                 process.kill()
             smart_cleanup(cfg, logger, wd.exe_names, wd.keywords)
+            if state is not None and state.current_process is process:
+                state.current_process = None
             return status
 
         while True:
@@ -209,12 +221,15 @@ class TaskRunner:
                 logger.log(f"⏹️ {wd.log_prefix} 用户中断")
                 return cleanup_and_exit(False)
 
+            # 轮询间隔（与原版一致：每次迭代先睡 watchdog_interval，避免忙等待烧 CPU）
+            self._sleep(watchdog_interval)
+
             # 全局超时
             if self._program_deadline and time.time() > self._program_deadline:
                 logger.log("⏰ 程序总时长超限，强制结束本任务", level="ERROR")
                 return cleanup_and_exit(False)
 
-            if time.time() - start_time > cfg["global_task_timeout"]:
+            if time.time() - start_time > global_task_timeout:
                 logger.log(f"⏰ {wd.log_prefix} 全局超时，强制终止", level="ERROR")
                 return cleanup_and_exit(False)
 
@@ -297,12 +312,13 @@ class TaskRunner:
             find_latest_log=lambda: get_latest_okww_log(cfg["okww_log_dir"]),
             ai_keywords=["鸣潮", "wuthering"],
             ai_context_fn=lambda: f"鸣潮日常，账号 {state.ww_analyzer.current_account}，进度 {state.ww_analyzer.progress}/{state.ww_analyzer.total}",
+            post_start_activate_keywords=["鸣潮", "wuthering", "ok-ww.exe"],
             special_failure_fn=special_failure,
         )
         # 将 analyze_fn 绑定为闭包
         wd.analyze_fn = lambda proc: state.ww_analyzer.analyze(proc.poll() is None, cfg["okww_log_dir"])
 
-        return self._run_with_watchdog(logger, wd, retry_count, cfg["ww_max_retries"])
+        return self._run_with_watchdog(logger, wd, retry_count, cfg["ww_max_retries"], state=state)
 
     # ---------- 终末地任务 ----------
 
@@ -331,7 +347,7 @@ class TaskRunner:
         )
         wd.analyze_fn = lambda proc: state.ef_analyzer.analyze(proc.poll() is None, cfg["maaend_log_dir"])
 
-        return self._run_with_watchdog(logger, wd, retry_count, cfg["ef_max_retries"])
+        return self._run_with_watchdog(logger, wd, retry_count, cfg["ef_max_retries"], state=state)
 
     # ---------- 异环任务 ----------
 
@@ -363,7 +379,7 @@ class TaskRunner:
         )
         wd.analyze_fn = lambda proc: state.nte_analyzer.analyze(oknte_log_dir)
 
-        return self._run_with_watchdog(logger, wd, retry_count, nte_max_retries)
+        return self._run_with_watchdog(logger, wd, retry_count, nte_max_retries, state=state)
 
     # ---------- 游戏模块级封装 ----------
 

@@ -200,27 +200,43 @@ class MaaEndLogAnalyzer(BaseLogAnalyzer):
         app_lines = self._read_new_lines(app_log_path)
         if app_lines:
             self._process_lines(app_lines)
-        # MaaEnd 完成后进程自动退出，此时如果 status 被 tasks-completed 置为 SUCCESS 则没问题
+        # MaaEnd 带有 --quit-after-run，任务跑完进程会直接退出，日志里不一定有
+        # tasks-completed 标记。此时若 status 仍为 RUNNING（未被 ERROR 置为 FAILED）
+        # 且确实开始并推进过任务，则判定为正常完成。
         if not process_running and self.status == TaskStatus.RUNNING:
-            # 再查一下是不是有更早的成功标记被漏掉了
-            if app_log_path:
-                try:
-                    with open(app_log_path, 'r', encoding='utf-8', errors='ignore') as f:
-                        full = f.read()
-                    if any(kw in full for kw in ["kind: tasks-completed", "成功", "自动执行任务完成"]):
-                        self.status = TaskStatus.SUCCESS
-                        # 关闭所有未结束的事件（最后一个任务可能没有收到 task-progress）
-                        if self._current_event and self._current_event.status == "running":
-                            self.finish_event("success", "进程退出判定完成", time.time())
-                        self.progress = self.total
-                        return self._build_result()
-                except Exception:
-                    pass
+            # 进程正常退出 + 已开始任务且有进展 + 全程无 ERROR（ERROR 会先把 status 置 FAILED）
+            if self.is_started and self.progress >= 1:
+                self.status = TaskStatus.SUCCESS
+                # 结束时刻取最后一条日志的时间戳，避免用 time.time() 导致耗时虚高
+                end_ts = self._last_line_timestamp(app_log_path) or time.time()
+                if self._current_event and self._current_event.status == "running":
+                    self.finish_event("success", "进程退出判定完成", end_ts)
+                self.progress = self.total
+                return self._build_result()
             self.status = TaskStatus.FAILED
             self.finish_event("failed", "进程意外终止", time.time())
             if not self.error_message:
                 self.error_message = "MaaEnd 进程中途崩溃"
         return self._build_result()
+
+    def _last_line_timestamp(self, log_path: str) -> Optional[float]:
+        """读取日志最后一行的时间戳，用作进程退出时的结束时刻"""
+        if not log_path or not os.path.exists(log_path):
+            return None
+        try:
+            with open(log_path, 'rb') as f:
+                # 从文件末尾向前取最后 4KB，定位最后一行
+                f.seek(0, os.SEEK_END)
+                size = f.tell()
+                f.seek(max(0, size - 4096))
+                tail = f.read().decode('utf-8', errors='ignore')
+            for line in reversed(tail.strip().splitlines()):
+                ts = self.parse_time(line)
+                if ts is not None:
+                    return ts
+        except Exception:
+            pass
+        return None
 
     def _process_lines(self, lines: List[str]):
         for line in lines:
