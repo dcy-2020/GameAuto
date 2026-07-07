@@ -209,6 +209,10 @@ class MaaEndLogAnalyzer(BaseLogAnalyzer):
                         full = f.read()
                     if any(kw in full for kw in ["kind: tasks-completed", "成功", "自动执行任务完成"]):
                         self.status = TaskStatus.SUCCESS
+                        # 关闭所有未结束的事件（最后一个任务可能没有收到 task-progress）
+                        if self._current_event and self._current_event.status == "running":
+                            self.finish_event("success", "进程退出判定完成", time.time())
+                        self.progress = self.total
                         return self._build_result()
                 except Exception:
                     pass
