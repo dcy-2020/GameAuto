@@ -58,59 +58,40 @@ def activate_target_window(title_keywords: List[str], config: dict) -> bool:
 
 
 def ensure_esc_menu(config: dict, logger, switcher=None, ai_client=None, max_ai_attempts=10):
-    """使用 AI 确保游戏处于大世界的 ESC 菜单界面"""
-    if ai_client is None:
-        if switcher is None:
-            logger.log("⚠️ 无 AI 也无 switcher，无法确认 ESC 菜单")
-            return True
+    """使用 AI 确保游戏处于大世界的 ESC 菜单界面
 
-        # 找到游戏窗口 HWND，用 PostMessage 直接注入 ESC 键（绕过前台锁）
-        WM_KEYDOWN = 0x0100
-        WM_KEYUP = 0x0101
-        VK_ESCAPE = 0x1B
-
-        for _ in range(max_ai_attempts):
-            windows = iter_windows_by_title(["鸣潮", "wuthering"])
-            if not windows:
-                logger.log("⚠️ 未找到游戏窗口，等待重试...")
-                time.sleep(2)
-                continue
-
-            hwnd = windows[0][0]
-            # 激活窗口（尽力而为）
-            set_window_foreground(hwnd, config)
-            time.sleep(0.3)
-
-            # PostMessage 注入 ESC（不依赖前台窗口）
-            ctypes.windll.user32.PostMessageW(hwnd, WM_KEYDOWN, VK_ESCAPE, 0)
-            time.sleep(0.1)
-            ctypes.windll.user32.PostMessageW(hwnd, WM_KEYUP, VK_ESCAPE, 0)
-            time.sleep(2)
-
-            # 诊断日志
-            img_path = os.path.join(switcher.img_dir, "power_btn.png")
-            file_ok = "存在" if os.path.exists(img_path) else "缺失"
-            try:
-                is_menu = switcher.is_on_esc_menu()
-            except Exception as ex:
-                logger.log(f"🔍 ESC 检测异常: {ex}", level="ERROR")
-                is_menu = False
-            logger.log(f"🔍 尝试 ESC | 文件:{file_ok} | 匹配:{'✅' if is_menu else '❌'}")
-            if is_menu:
-                return True
-        logger.log(f"❌ 无 AI 时 {max_ai_attempts} 次尝试未能进入 ESC 菜单 | 图包路径: {switcher.img_dir}", level="ERROR")
-        return False
-
+    流程：
+      1. 先模板匹配 power_btn.png —— 已在菜单直接返回，省掉一轮 AI 调用
+      2. 按 ESC（可能在大世界打开菜单，或在菜单上关掉再打开）
+      3. 再次模板匹配，匹配成功直接返回
+      4. 匹配失败才走 AI（截图→问 AI→执行动作）
+    """
     WM_KEYDOWN = 0x0100
     WM_KEYUP = 0x0101
     VK_ESCAPE = 0x1B
+    api_timeout = config.get("ai_api_timeout", 300)
 
-    for i in range(max_ai_attempts):
+    def try_template_check() -> bool:
+        """快速模板匹配检查，已在 ESC 菜单则返回 True"""
+        if not switcher:
+            return False
+        try:
+            is_menu = switcher.is_on_esc_menu()
+        except Exception as ex:
+            logger.log(f"🔍 ESC 模板检测异常: {ex}", level="ERROR")
+            return False
+        if is_menu:
+            logger.log("✅ 模板匹配确认已在 ESC 菜单")
+            return True
+        return False
+
+    def press_esc():
+        """找到游戏窗口并按一次 ESC"""
         windows = iter_windows_by_title(["鸣潮", "wuthering"])
         if windows:
             hwnd = windows[0][0]
             set_window_foreground(hwnd, config)
-            time.sleep(0.5)
+            time.sleep(0.3)
             ctypes.windll.user32.PostMessageW(hwnd, WM_KEYDOWN, VK_ESCAPE, 0)
             time.sleep(0.1)
             ctypes.windll.user32.PostMessageW(hwnd, WM_KEYUP, VK_ESCAPE, 0)
@@ -119,6 +100,33 @@ def ensure_esc_menu(config: dict, logger, switcher=None, ai_client=None, max_ai_
             activate_target_window(["鸣潮", "wuthering"], config)
             time.sleep(2)
 
+    # ---- 第 0 步：先查模板（0 成本，已在菜单就省掉整轮 AI） ----
+    if try_template_check():
+        return True
+
+    if ai_client is None:
+        # 无 AI 路径：纯 PostMessage + 模板匹配
+        for i in range(max_ai_attempts):
+            press_esc()
+            if try_template_check():
+                return True
+            # 诊断日志（兼容旧行为）
+            img_path = os.path.join(switcher.img_dir, "power_btn.png") if switcher else "N/A"
+            file_ok = "存在" if os.path.exists(img_path) else "缺失"
+            logger.log(f"🔍 尝试 ESC({i + 1}) | 文件:{file_ok} | 匹配:❌")
+        logger.log(f"❌ 无 AI 时 {max_ai_attempts} 次尝试未能进入 ESC 菜单 | 图包路径: {img_path}", level="ERROR")
+        return False
+
+    # ---- AI 路径 ----
+    for i in range(max_ai_attempts):
+        # 第 1 步：按 ESC（游戏在大世界→打开菜单，或在弹窗→关掉弹窗）
+        press_esc()
+
+        # 第 2 步：模板匹配，成功直接返回（不等 AI）
+        if try_template_check():
+            return True
+
+        # 第 3 步：模板没匹配到，走 AI
         screenshot_b64 = ai_client.capture_screen()
         if not screenshot_b64:
             continue
@@ -130,10 +138,11 @@ def ensure_esc_menu(config: dict, logger, switcher=None, ai_client=None, max_ai_
             '如果不是（例如在弹窗、加载画面、其他界面），请判断需要如何操作才能回到ESC菜单，'
             '例如点击关闭按钮、按ESC键、或点击空白区域关闭弹窗，并返回对应的点击坐标或按键。'
         )
-        action = ai_client.ask_for_action(screenshot_b64, context)
+        action = ai_client.ask_for_action(screenshot_b64, context, timeout=api_timeout)
 
         if action:
             if action.get("action") == "skip":
+                # AI 说到了，但模板二次校验
                 if switcher and not switcher.is_on_esc_menu():
                     logger.log("🧠 AI 判断为 ESC 但未检测到退出按钮，可能是误判，继续尝试...")
                     continue
@@ -142,6 +151,9 @@ def ensure_esc_menu(config: dict, logger, switcher=None, ai_client=None, max_ai_
             else:
                 ai_client.execute_action(action)
                 time.sleep(2)
+                # AI 执行完动作后再查一次模板
+                if try_template_check():
+                    return True
         else:
             logger.log("⚠️ AI 无有效返回，重新尝试")
 

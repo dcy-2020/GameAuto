@@ -76,10 +76,13 @@ DEFAULT_CONFIG = {
 
     # ===== AI 配置 =====
     "enable_ai_assist": False,
+    "ai_provider": "aliyun",
+    "ai_base_url": "",
     "dashscope_api_key": "",
     "ai_model": "qwen3-vl-flash",
     "ai_trigger_timeout": 30,
     "ai_max_attempts": 10,
+    "ai_api_timeout": 300,
     "ai_click_confidence": 0.7,
 }
 
@@ -131,10 +134,13 @@ CONFIG_HELP = {
     "round_interval": ("轮次 - 间隔(秒)", "多轮执行时的间隔时间"),
     "total_rounds": ("轮次 - 总轮数", "总共执行的轮数"),
     "enable_ai_assist": ("AI - 启用", "是否启用 AI 辅助异常处理"),
-    "dashscope_api_key": ("AI - API Key", "阿里云 DashScope API Key"),
-    "ai_model": ("AI - 模型", "多模态模型名称"),
+    "ai_provider": ("AI - 服务商", "AI 服务商选择（当前仅 aliyun）"),
+    "ai_base_url": ("AI - 自定义地址", "留空用默认地址；可填自定义端点"),
+    "dashscope_api_key": ("AI - API Key", "对应服务商的 API Key"),
+    "ai_model": ("AI - 模型", "模型名称，留空用服务商默认值"),
     "ai_trigger_timeout": ("AI - 触发超时(秒)", "日志静默多久触发AI检查"),
     "ai_max_attempts": ("AI - 最大尝试", "每轮任务最多AI干预次数"),
+    "ai_api_timeout": ("AI - API超时(秒)", "单次 AI 请求超时时间，默认 300 秒"),
     "ai_click_confidence": ("AI - 点击置信度", "保留参数，暂未使用"),
 }
 
@@ -183,8 +189,9 @@ CONFIG_GROUPS = {
     "ai": {
         "label": "AI",
         "keys": [
-            "enable_ai_assist", "dashscope_api_key", "ai_model",
-            "ai_trigger_timeout", "ai_max_attempts", "ai_click_confidence",
+            "enable_ai_assist", "ai_provider", "ai_base_url",
+            "dashscope_api_key", "ai_model",
+            "ai_trigger_timeout", "ai_max_attempts", "ai_api_timeout", "ai_click_confidence",
         ],
     },
     "network": {

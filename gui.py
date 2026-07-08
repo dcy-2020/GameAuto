@@ -567,6 +567,14 @@ class GameAutoGUI(ctk.CTk):
                     editor.set_items(value)
                     self._config_widgets[key] = ("list", editor)
 
+                elif key == "ai_provider":
+                    var = ctk.StringVar(value=str(value) if value else "aliyun")
+                    ctk.CTkOptionMenu(
+                        scroll_frame, values=["aliyun"], variable=var, width=120, height=30,
+                        font=ctk.CTkFont(*FONT_DEFAULT), fg_color=COLORS["bg"], button_color=COLORS["accent"]
+                    ).grid(row=row, column=1, sticky="w", padx=4, pady=(8, 0))
+                    self._config_widgets[key] = ("option", var)
+
                 elif isinstance(value, int) and key in ("okww_run_mode",):
                     var = ctk.StringVar(value=str(value))
                     ctk.CTkOptionMenu(

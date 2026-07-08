@@ -147,10 +147,12 @@ class TaskRunner:
         if self.config.get("enable_ai_assist", False) and self.config.get("dashscope_api_key"):
             client = AIAssistant(
                 api_key=self.config["dashscope_api_key"],
-                model=self.config.get("ai_model", "qwen3.6-flash"),
+                model=self.config.get("ai_model", ""),
                 logger=logger,
+                provider=self.config.get("ai_provider", "aliyun"),
+                base_url=self.config.get("ai_base_url", ""),
             )
-            logger.log("🧠 AI辅助模块已初始化")
+            logger.log(f"🧠 AI辅助模块已初始化（服务商={self.config.get('ai_provider', 'aliyun')}）")
             return client
         if self.config.get("enable_ai_assist", False):
             logger.log("⚠️ AI未启用：缺少API Key", level="WARN")
@@ -263,7 +265,8 @@ class TaskRunner:
 
                     if screenshot_b64:
                         context = wd.ai_context_fn()
-                        action = self._ai_client.ask_for_action(screenshot_b64, context)
+                        action = self._ai_client.ask_for_action(
+                            screenshot_b64, context, timeout=cfg.get("ai_api_timeout", 300))
                         if action and self._ai_client.execute_action(action):
                             wd.analyzer.last_log_time = time.time()
                             continue

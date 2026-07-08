@@ -14,16 +14,29 @@ from typing import Optional
 class AIAssistant:
     """AI 辅助助手 - 通过多模态模型分析截图并执行操作"""
 
-    def __init__(self, api_key: str, model: str = "qwen3.6-flash", logger=None):
+    # 服务商预设
+    _PROVIDERS = {
+        "aliyun": {
+            "base_url": "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation",
+            "default_model": "qwen3-vl-flash",
+            "protocol": "dashscope",
+        },
+    }
+
+    def __init__(self, api_key: str, model: str = "qwen3.6-flash", logger=None,
+                 provider: str = "aliyun", base_url: str = ""):
         self.api_key = api_key
-        self.model = model
+        self.provider = (provider or "aliyun").lower()
+        preset = self._PROVIDERS.get(self.provider, self._PROVIDERS["aliyun"])
+        self.model = model or preset["default_model"]
+        self.protocol = preset["protocol"]
+        self.api_url = (base_url or preset["base_url"]).rstrip("/")
         if logger is None:
             class _DummyLogger:
                 def log(self, *args, **kwargs): pass
             self.logger = _DummyLogger()
         else:
             self.logger = logger
-        self.api_url = "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
         self.headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json"
@@ -64,7 +77,7 @@ class AIAssistant:
             self._log(f"截图失败: {e}", "WARN")
             return None
 
-    def ask_for_action(self, screenshot_b64: str, context: str) -> Optional[dict]:
+    def ask_for_action(self, screenshot_b64: str, context: str, timeout: int = 120) -> Optional[dict]:
         if not screenshot_b64:
             return None
 
@@ -104,8 +117,10 @@ class AIAssistant:
                 "result_format": "message"
             }
         }
+        # 强制直连，避免系统代理劫持内网端点导致超时
+        no_proxy = {"http": None, "https": None}
         try:
-            resp = requests.post(self.api_url, headers=self.headers, json=payload, timeout=120)
+            resp = requests.post(self.api_url, headers=self.headers, json=payload, timeout=timeout, proxies=no_proxy)
             if resp.status_code == 200:
                 data = resp.json()
                 text = self._extract_text_from_response(data)
