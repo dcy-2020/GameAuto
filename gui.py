@@ -6,6 +6,20 @@ import threading
 import customtkinter as ctk
 from tkinter import filedialog, messagebox
 
+# ===== 全局字体配置 =====
+# 引入现代化无衬线字体，增强秩序感
+FONT_FAMILY = "Microsoft YaHei UI"
+FONT_DEFAULT = (FONT_FAMILY, 13)
+FONT_BOLD = (FONT_FAMILY, 13, "bold")
+FONT_TITLE = (FONT_FAMILY, 16, "bold")
+FONT_SMALL = (FONT_FAMILY, 11)
+FONT_CODE = ("Consolas", 12)  # 日志区域使用等宽字体
+
+# ===== 圆角 & 间距标准 =====
+CORNER_SMALL  = 4
+CORNER_MEDIUM = 6
+CORNER_LARGE  = 10
+
 # ===== 主题系统 =====
 THEMES = {
     "暗夜绿": {
@@ -16,72 +30,77 @@ THEMES = {
         "accent":    "#21262d",
         "highlight": "#3fb950",
         "success":   "#3fb950",
-        "warning":   "#d2991d",
+        "warning":   "#d29922",
         "error":     "#f85149",
         "info":      "#58a6ff",
         "text":      "#c9d1d9",
         "text_dim":  "#8b949e",
         "border":    "#30363d",
+        "log_bg":    "#090c10",
     },
     "深海蓝": {
         "appearance": "dark",
         "ctk_theme":  "blue",
         "bg":        "#0a0e27",
-        "fg":        "#111640",
-        "accent":    "#1a2048",
-        "highlight": "#4a9eff",
-        "success":   "#4a9eff",
-        "warning":   "#e2b03d",
+        "fg":        "#151b3a",
+        "accent":    "#1a2250",
+        "highlight": "#5b9cf5",
+        "success":   "#3fb950",
+        "warning":   "#d4a843",
         "error":     "#f85149",
-        "info":      "#4a9eff",
-        "text":      "#c9d1d9",
-        "text_dim":  "#8b949e",
+        "info":      "#79b8ff",
+        "text":      "#e2e8f0",
+        "text_dim":  "#a0aec0",
         "border":    "#2a3560",
+        "log_bg":    "#050714",
     },
     "碳素灰": {
         "appearance": "dark",
         "ctk_theme":  "dark-blue",
-        "bg":        "#1a1a1a",
-        "fg":        "#242424",
-        "accent":    "#2e2e2e",
-        "highlight": "#888888",
-        "success":   "#6aaa64",
-        "warning":   "#c9a43b",
-        "error":     "#d94a4a",
-        "info":      "#8b8b8b",
-        "text":      "#cccccc",
-        "text_dim":  "#888888",
-        "border":    "#3a3a3a",
+        "bg":        "#1a1b1e",
+        "fg":        "#25262b",
+        "accent":    "#2c2e33",
+        "highlight": "#7c8090",
+        "success":   "#4ec9a0",
+        "warning":   "#e6ca62",
+        "error":     "#fa5252",
+        "info":      "#79b8ff",
+        "text":      "#c1c2c5",
+        "text_dim":  "#909296",
+        "border":    "#373a40",
+        "log_bg":    "#141517",
     },
     "日落橙": {
         "appearance": "dark",
         "ctk_theme":  "green",
         "bg":        "#1c1410",
-        "fg":        "#261d16",
-        "accent":    "#2f241c",
-        "highlight": "#f0883e",
-        "success":   "#f0883e",
-        "warning":   "#e2b03d",
-        "error":     "#f85149",
-        "info":      "#e2b03d",
+        "fg":        "#2d2218",
+        "accent":    "#3a2c20",
+        "highlight": "#e88a20",
+        "success":   "#4ec9a0",
+        "warning":   "#fbbf24",
+        "error":     "#ef4444",
+        "info":      "#79b8ff",
         "text":      "#d4c5b9",
         "text_dim":  "#9e8e7e",
         "border":    "#3d3028",
+        "log_bg":    "#120d0a",
     },
     "极光白": {
         "appearance": "light",
         "ctk_theme":  "green",
-        "bg":        "#e8ecef",
-        "fg":        "#f6f8fa",
-        "accent":    "#e0e4e8",
-        "highlight": "#2da44e",
-        "success":   "#2da44e",
-        "warning":   "#bf8700",
+        "bg":        "#f8f9fa",
+        "fg":        "#ffffff",
+        "accent":    "#eef1f5",
+        "highlight": "#1a7f37",
+        "success":   "#1a7f37",
+        "warning":   "#9a6700",
         "error":     "#cf222e",
         "info":      "#0969da",
         "text":      "#1f2328",
-        "text_dim":  "#656d76",
-        "border":    "#d0d7de",
+        "text_dim":  "#545d68",
+        "border":    "#c4ccd4",
+        "log_bg":    "#f3f4f6",
     },
 }
 
@@ -97,6 +116,13 @@ LOG_LEVEL_COLORS = {
 }
 
 
+def _darker(hex_color: str, factor: float = 0.8) -> str:
+    """返回 hex 颜色的暗色变体，用于 hover 状态"""
+    r, g, b = int(hex_color[1:3], 16), int(hex_color[3:5], 16), int(hex_color[5:7], 16)
+    r, g, b = int(r * factor), int(g * factor), int(b * factor)
+    return f"#{r:02x}{g:02x}{b:02x}"
+
+
 class LogViewer(ctk.CTkFrame):
     """实时日志查看器 - 彩色分级显示"""
 
@@ -105,9 +131,13 @@ class LogViewer(ctk.CTkFrame):
 
         self.textbox = ctk.CTkTextbox(
             self,
-            fg_color=COLORS["bg"],
+            fg_color=COLORS.get("log_bg", COLORS["bg"]),
             text_color=COLORS["text"],
+            font=ctk.CTkFont(*FONT_CODE),
             wrap="word",
+            corner_radius=CORNER_MEDIUM,
+            border_width=1,
+            border_color=COLORS["border"]
         )
         self.textbox.pack(fill="both", expand=True, padx=2, pady=2)
 
@@ -147,21 +177,25 @@ class StringListEditor(ctk.CTkFrame):
         self.grid_columnconfigure(0, weight=1)
 
         btn_row = ctk.CTkFrame(self, fg_color="transparent")
-        btn_row.grid(row=0, column=0, sticky="ew", padx=2, pady=(0, 4))
+        btn_row.grid(row=0, column=0, sticky="ew", padx=0, pady=(0, 6))
 
         ctk.CTkButton(
-            btn_row, text="+ 添加", width=70, height=28,
+            btn_row, text="+ 添加项目", width=80, height=28,
+            font=ctk.CTkFont(*FONT_DEFAULT),
+            fg_color=COLORS["accent"], hover_color=COLORS["border"], text_color=COLORS["text"],
             command=self._add_item,
-        ).pack(side="left", padx=2)
+        ).pack(side="left", padx=(0, 6))
 
         ctk.CTkButton(
-            btn_row, text="清空", width=60, height=28,
-            fg_color=COLORS["accent"],
+            btn_row, text="清空列表", width=70, height=28,
+            font=ctk.CTkFont(*FONT_DEFAULT),
+            fg_color="transparent", border_width=1, border_color=COLORS["border"], text_color=COLORS["text_dim"],
+            hover_color=COLORS["accent"],
             command=self.clear,
-        ).pack(side="left", padx=2)
+        ).pack(side="left")
 
-        self._scroll_frame = ctk.CTkScrollableFrame(self, fg_color="transparent", height=100)
-        self._scroll_frame.grid(row=1, column=0, sticky="nsew", padx=2)
+        self._scroll_frame = ctk.CTkScrollableFrame(self, fg_color=COLORS["bg"], height=100, corner_radius=CORNER_MEDIUM)
+        self._scroll_frame.grid(row=1, column=0, sticky="nsew")
         self._scroll_frame.grid_columnconfigure(0, weight=1)
 
     def set_items(self, items: list):
@@ -175,17 +209,18 @@ class StringListEditor(ctk.CTkFrame):
     def _add_item(self, value: str = ""):
         row = len(self._item_frames)
         frame = ctk.CTkFrame(self._scroll_frame, fg_color="transparent")
-        frame.grid(row=row, column=0, sticky="ew", pady=1)
+        frame.grid(row=row, column=0, sticky="ew", pady=2)
         frame.grid_columnconfigure(0, weight=1)
 
-        entry = ctk.CTkEntry(frame, placeholder_text="请输入...")
-        entry.grid(row=0, column=0, sticky="ew", padx=(0, 4))
+        entry = ctk.CTkEntry(frame, placeholder_text="请输入内容...", font=ctk.CTkFont(*FONT_DEFAULT), height=28)
+        entry.grid(row=0, column=0, sticky="ew", padx=(0, 6))
         if value:
             entry.insert(0, value)
 
         btn = ctk.CTkButton(
-            frame, text="✕", width=30, height=28,
-            fg_color=COLORS["error"],
+            frame, text="✕", width=28, height=28,
+            font=ctk.CTkFont(*FONT_DEFAULT),
+            fg_color="transparent", hover_color=COLORS["error"], text_color=COLORS["text_dim"],
             command=lambda f=frame, e=entry: self._remove_item(f, e),
         )
         btn.grid(row=0, column=1)
@@ -243,49 +278,55 @@ class GameAutoGUI(ctk.CTk):
             self._import_error = str(e)
 
         self.title("🎮 GameAuto Daily v2.1")
-        self.geometry("1600x900")
-        self.minsize(1000, 650)
+        self.geometry("1400x850")
+        self.minsize(1100, 650)
+        self.configure(fg_color=COLORS["bg"])
 
         self._build_ui()
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
     def _build_ui(self):
         # ---- 顶部标题栏 ----
-        title_bar = ctk.CTkFrame(self, height=44, fg_color=COLORS["fg"],
+        title_bar = ctk.CTkFrame(self, height=56, fg_color=COLORS["fg"],
                                  corner_radius=0)
         title_bar.pack(fill="x", padx=0, pady=0)
 
         ctk.CTkLabel(
             title_bar, text="🎮  GameAuto Daily",
+            font=ctk.CTkFont(*FONT_TITLE),
             text_color=COLORS["highlight"],
-        ).pack(side="left", padx=20, pady=10)
+        ).pack(side="left", padx=24, pady=16)
 
         # 主题切换按钮组
         theme_group = ctk.CTkFrame(title_bar, fg_color="transparent")
-        theme_group.pack(side="right", padx=(0, 8), pady=8)
+        theme_group.pack(side="right", padx=(0, 16), pady=12)
 
         self._theme_btns = {}
         theme_names = list(THEMES.keys())
         for i, name in enumerate(theme_names):
             is_active = (name == self._theme)
             btn = ctk.CTkButton(
-                theme_group, text=name, width=52, height=22,
-                fg_color=COLORS["highlight"] if is_active else COLORS["accent"],
-                hover_color=COLORS["highlight"],
+                theme_group, text=name, width=54, height=26,
+                font=ctk.CTkFont(*FONT_SMALL),
+                fg_color=COLORS["highlight"] if is_active else "transparent",
+                text_color="#ffffff" if is_active else COLORS["text_dim"],
+                hover_color=COLORS["highlight"] if is_active else COLORS["accent"],
+                corner_radius=CORNER_SMALL,
                 command=lambda n=name: self._switch_theme(n),
             )
-            btn.pack(side="left", padx=1)
+            btn.pack(side="left", padx=2)
             self._theme_btns[name] = btn
 
         self._status_label = ctk.CTkLabel(
             title_bar, text="● 就绪",
+            font=ctk.CTkFont(*FONT_BOLD),
             text_color=COLORS["success"],
         )
-        self._status_label.pack(side="right", padx=(0, 15), pady=10)
+        self._status_label.pack(side="right", padx=(0, 24), pady=16)
 
         # ---- 主内容区：左右分栏 ----
         main_area = ctk.CTkFrame(self, fg_color="transparent")
-        main_area.pack(fill="both", expand=True, padx=6, pady=(6, 0))
+        main_area.pack(fill="both", expand=True, padx=16, pady=16)
         main_area.grid_columnconfigure(0, weight=1)  # 左侧伸展
         main_area.grid_columnconfigure(1, weight=0)  # 拖拽手柄(固定)
         main_area.grid_columnconfigure(2, weight=0)  # 右侧(可拖拽调整)
@@ -293,40 +334,43 @@ class GameAutoGUI(ctk.CTk):
 
         # ===== 左侧：配置 Tab =====
         left_panel = ctk.CTkFrame(main_area, fg_color=COLORS["fg"],
-                                  corner_radius=10)
-        left_panel.grid(row=0, column=0, sticky="nsew", padx=(0, 1))
+                                  corner_radius=CORNER_LARGE)
+        left_panel.grid(row=0, column=0, sticky="nsew", padx=(0, 4))
         left_panel.grid_rowconfigure(0, weight=1)
         left_panel.grid_columnconfigure(0, weight=1)
 
         # ===== 拖拽手柄 =====
-        self._handle = ctk.CTkFrame(main_area, width=5, fg_color="transparent",
+        self._handle = ctk.CTkFrame(main_area, width=12, fg_color="transparent",
                                      cursor="sb_h_double_arrow")
-        self._handle.grid(row=0, column=1, sticky="ns", padx=0)
+        self._handle.grid(row=0, column=1, sticky="ns", padx=2)
         self._handle.bind("<ButtonPress-1>", self._on_handle_press)
         self._handle.bind("<B1-Motion>", self._on_handle_drag)
         # 手柄中间画一条竖线
-        handle_line = ctk.CTkFrame(self._handle, width=1, fg_color=COLORS["border"])
-        handle_line.place(relx=0.5, rely=0, relheight=1, anchor="n")
+        handle_line = ctk.CTkFrame(self._handle, width=3, fg_color=COLORS["border"], corner_radius=2)
+        handle_line.place(relx=0.5, rely=0.5, relheight=0.2, anchor="center")
         # 手柄悬停高亮
         def on_enter(e): handle_line.configure(fg_color=COLORS["highlight"])
         def on_leave(e): handle_line.configure(fg_color=COLORS["border"])
         self._handle.bind("<Enter>", on_enter)
         self._handle.bind("<Leave>", on_leave)
 
-        # 右侧面板初始宽度（优先从配置恢复，否则默认 420）
-        self._right_width = self.config.get("_splitter_pos", 420)
+        # 右侧面板初始宽度
+        self._right_width = self.config.get("_splitter_pos", 480)
         main_area.grid_columnconfigure(2, minsize=self._right_width)
 
         self._tabview = ctk.CTkTabview(
             left_panel,
-            fg_color=COLORS["fg"],
-            segmented_button_fg_color=COLORS["accent"],
-            segmented_button_selected_color=COLORS["highlight"],
-            segmented_button_unselected_color=COLORS["accent"],
-            segmented_button_unselected_hover_color="#2d3748",
-            corner_radius=8,
+            fg_color="transparent",
+            segmented_button_fg_color=COLORS["bg"],
+            segmented_button_selected_color=COLORS["accent"],
+            segmented_button_unselected_color=COLORS["bg"],
+            segmented_button_unselected_hover_color=COLORS["border"],
+            segmented_button_font=ctk.CTkFont(FONT_FAMILY, 14, "bold"),
+            text_color=COLORS["text"],
+            text_color_disabled=COLORS["text_dim"],
+            corner_radius=CORNER_MEDIUM,
         )
-        self._tabview.pack(fill="both", expand=True, padx=4, pady=4)
+        self._tabview.pack(fill="both", expand=True, padx=12, pady=(0, 12))
 
         from config_manager import CONFIG_GROUPS
         self._config_widgets = {}
@@ -339,148 +383,230 @@ class GameAutoGUI(ctk.CTk):
 
         # ===== 右侧：日志 + 控制面板 =====
         right_panel = ctk.CTkFrame(main_area, fg_color=COLORS["fg"],
-                                   corner_radius=10)
-        right_panel.grid(row=0, column=2, sticky="nsew", padx=(1, 0))
+                                   corner_radius=CORNER_LARGE)
+        right_panel.grid(row=0, column=2, sticky="nsew", padx=(4, 0))
         right_panel.grid_rowconfigure(0, weight=1)
         right_panel.grid_rowconfigure(1, weight=0)
         right_panel.grid_rowconfigure(2, weight=0)
         right_panel.grid_columnconfigure(0, weight=1)
 
         # 日志
-        log_header = ctk.CTkFrame(right_panel, fg_color="transparent", height=28)
-        log_header.grid(row=0, column=0, sticky="ew", padx=6, pady=(6, 0))
+        log_header = ctk.CTkFrame(right_panel, fg_color="transparent", height=36)
+        log_header.grid(row=0, column=0, sticky="ew", padx=16, pady=(16, 0))
 
-        ctk.CTkLabel(log_header, text="📋 运行日志").pack(side="left")
+        ctk.CTkLabel(log_header, text="📋 运行日志", font=ctk.CTkFont(*FONT_BOLD)).pack(side="left")
         ctk.CTkButton(
-            log_header, text="清空", width=50, height=24,
-            fg_color=COLORS["accent"],
+            log_header, text="清空", width=60, height=26,
+            font=ctk.CTkFont(*FONT_SMALL),
+            fg_color="transparent", border_width=1, border_color=COLORS["border"], text_color=COLORS["text_dim"],
+            hover_color=COLORS["accent"],
             command=self._clear_log,
-        ).pack(side="right", padx=2)
+        ).pack(side="right")
 
-        self._log_viewer = LogViewer(right_panel)
-        self._log_viewer.grid(row=0, column=0, sticky="nsew", padx=4, pady=(30, 4))
+        self._log_viewer = LogViewer(right_panel, fg_color="transparent")
+        self._log_viewer.grid(row=0, column=0, sticky="nsew", padx=12, pady=(45, 12))
 
         # 计划任务状态
-        sched_bar = ctk.CTkFrame(right_panel, fg_color=COLORS["accent"],
-                                 corner_radius=6, height=36)
-        sched_bar.grid(row=1, column=0, sticky="ew", padx=4, pady=(0, 4))
+        sched_bar = ctk.CTkFrame(right_panel, fg_color=COLORS["bg"], corner_radius=CORNER_MEDIUM)
+        sched_bar.grid(row=1, column=0, sticky="ew", padx=12, pady=(0, 12))
         sched_bar.grid_columnconfigure(0, weight=1)
 
-        ctk.CTkLabel(sched_bar, text="⏰ 计划任务").pack(side="left", padx=8, pady=6)
+        ctk.CTkLabel(sched_bar, text="⏰", font=ctk.CTkFont(size=20)).pack(side="left", padx=(12, 4), pady=12)
+        
+        sched_info_frame = ctk.CTkFrame(sched_bar, fg_color="transparent")
+        sched_info_frame.pack(side="left", fill="y", pady=8)
+        ctk.CTkLabel(sched_info_frame, text="计划任务", font=ctk.CTkFont(*FONT_BOLD)).pack(anchor="w", pady=(0, 0))
+        
         self._schedule_status_label = ctk.CTkLabel(
-            sched_bar, text="检查中...", text_color=COLORS["text_dim"],
+            sched_info_frame, text="检查中...", font=ctk.CTkFont(*FONT_SMALL), text_color=COLORS["text_dim"],
         )
-        self._schedule_status_label.pack(side="left", padx=4, pady=6)
+        self._schedule_status_label.pack(anchor="w")
 
         ctk.CTkButton(
-            sched_bar, text="创建", width=55, height=24,
-            fg_color=COLORS["success"], hover_color="#2ea043",
+            sched_bar, text="配置任务", width=70, height=30,
+            font=ctk.CTkFont(*FONT_DEFAULT),
+            fg_color=COLORS["accent"], text_color=COLORS["text"], hover_color=COLORS["border"],
             command=self._schedule_create,
-        ).pack(side="right", padx=2, pady=6)
+        ).pack(side="right", padx=(4, 12), pady=12)
         ctk.CTkButton(
-            sched_bar, text="删除", width=55, height=24,
-            fg_color=COLORS["error"], hover_color="#da3633",
+            sched_bar, text="取消任务", width=60, height=30,
+            font=ctk.CTkFont(*FONT_DEFAULT),
+            fg_color="transparent", text_color=COLORS["error"], hover_color=COLORS["accent"],
             command=self._schedule_delete,
-        ).pack(side="right", padx=2, pady=6)
+        ).pack(side="right", padx=0, pady=12)
 
         # 控制按钮
         ctrl_bar = ctk.CTkFrame(right_panel, fg_color="transparent")
-        ctrl_bar.grid(row=2, column=0, sticky="ew", padx=4, pady=(0, 6))
+        ctrl_bar.grid(row=2, column=0, sticky="ew", padx=12, pady=(0, 16))
 
         ctk.CTkButton(
-            ctrl_bar, text="💾 保存配置", width=85, height=30,
-            fg_color=COLORS["accent"], hover_color="#2d3748",
+            ctrl_bar, text="💾 保存配置", width=95, height=36,
+            font=ctk.CTkFont(*FONT_DEFAULT),
+            fg_color=COLORS["accent"], hover_color=COLORS["border"], text_color=COLORS["text"],
             command=self._save_config,
-        ).pack(side="left", padx=2, pady=4)
+        ).pack(side="left", padx=(0, 8))
 
         ctk.CTkButton(
-            ctrl_bar, text="🔄 恢复默认", width=85, height=30,
-            fg_color=COLORS["accent"], hover_color="#2d3748",
+            ctrl_bar, text="🔄 恢复默认", width=95, height=36,
+            font=ctk.CTkFont(*FONT_DEFAULT),
+            fg_color="transparent", border_width=1, border_color=COLORS["border"], text_color=COLORS["text_dim"],
+            hover_color=COLORS["accent"],
             command=self._reset_config,
-        ).pack(side="left", padx=2, pady=4)
+        ).pack(side="left")
 
         self._start_btn = ctk.CTkButton(
-            ctrl_bar, text="▶ 开始", width=80, height=30,
-            fg_color=COLORS["success"], hover_color="#2ea043",
+            ctrl_bar, text="▶ 开始执行", width=110, height=36,
+            font=ctk.CTkFont(*FONT_BOLD),
+            fg_color=COLORS["success"], hover_color=_darker(COLORS["success"]), text_color="#ffffff",
             command=self._start_task,
         )
-        self._start_btn.pack(side="right", padx=2, pady=4)
+        self._start_btn.pack(side="right", padx=(8, 0))
 
         self._stop_btn = ctk.CTkButton(
-            ctrl_bar, text="⏹ 停止", width=80, height=30,
-            fg_color=COLORS["error"], hover_color="#da3633",
+            ctrl_bar, text="⏹ 停止", width=80, height=36,
+            font=ctk.CTkFont(*FONT_BOLD),
+            fg_color=COLORS["error"], hover_color=_darker(COLORS["error"]), text_color="#ffffff",
             command=self._stop_task,
             state="disabled",
         )
-        self._stop_btn.pack(side="right", padx=2, pady=4)
+        self._stop_btn.pack(side="right")
 
         self.after(500, self._refresh_schedule_status)
 
+    def _build_section_header(self, parent, title: str, row: int) -> int:
+        """在配置表单中插入分区标题 + 分割线"""
+        ctk.CTkLabel(
+            parent, text=title,
+            font=ctk.CTkFont(FONT_FAMILY, 12, "bold"),
+            text_color=COLORS["highlight"], anchor="w",
+        ).grid(row=row, column=0, columnspan=3, sticky="w", padx=(8, 0), pady=(16, 2))
+        ctk.CTkFrame(
+            parent, height=1, fg_color=COLORS["border"],
+        ).grid(row=row + 1, column=0, columnspan=3, sticky="ew", padx=(8, 8), pady=(0, 6))
+        return row + 2
+
+    @staticmethod
+    def _get_sections_for_group(group_key: str, keys: list) -> list:
+        """将配置 key 列表按逻辑分组，返回 [(title, [keys]), ...]"""
+        path_keys = {"okww_path", "okww_exe", "okww_log_dir", "maaend_path", "maaend_exe",
+                     "maaend_log_dir", "oknte_path", "oknte_exe", "oknte_log_dir",
+                     "ww_game_exe", "ef_game_exe"}
+        time_keys = {"watchdog_interval", "log_timeout", "retry_wait", "global_task_timeout",
+                     "max_program_runtime", "boot_max_wait", "cleanup_wait_first",
+                     "cleanup_wait_check", "window_activate_wait", "process_start_wait"}
+
+        if group_key == "general":
+            run_keys = {"report_log_path", "auto_shutdown", "shutdown_timeout_seconds",
+                        "schedule_enabled", "schedule_time", "schedule_task_name",
+                        "total_rounds", "round_interval"}
+            sections = []
+            run_section = [k for k in keys if k in run_keys]
+            if run_section:
+                sections.append(("运行控制", run_section))
+            time_section = [k for k in keys if k in time_keys]
+            if time_section:
+                sections.append(("超时与看门狗", time_section))
+            other = [k for k in keys if k not in run_keys and k not in time_keys]
+            if other:
+                sections.append(("系统与窗口", other))
+            return sections
+
+        if group_key in ("okww", "maaend", "oknte"):
+            path_section = [k for k in keys if k in path_keys]
+            param_section = [k for k in keys if k not in path_keys]
+            sections = []
+            if path_section:
+                sections.append(("路径配置", path_section))
+            if param_section:
+                sections.append(("运行参数", param_section))
+            return sections
+
+        return [("配置", keys)]
+
     def _build_config_form(self, parent_tab, keys: list):
-        from config_manager import CONFIG_HELP
+        from config_manager import CONFIG_HELP, CONFIG_GROUPS
 
         scroll_frame = ctk.CTkScrollableFrame(parent_tab, fg_color="transparent")
-        scroll_frame.pack(fill="both", expand=True, padx=5, pady=5)
+        scroll_frame.pack(fill="both", expand=True, padx=4, pady=4)
         scroll_frame.grid_columnconfigure(1, weight=1)
 
+        # 确定当前 Tab 对应的 group_key
+        group_key = None
+        for gk, gi in CONFIG_GROUPS.items():
+            if set(gi["keys"]) == set(keys):
+                group_key = gk
+                break
+
+        sections = self._get_sections_for_group(group_key or "other", keys)
         row = 0
-        for key in keys:
-            help_info = CONFIG_HELP.get(key, (key, ""))
-            label_text = help_info[0] if isinstance(help_info, tuple) else key
 
-            ctk.CTkLabel(
-                scroll_frame, text=label_text, anchor="w",
-            ).grid(row=row, column=0, sticky="w", padx=(5, 10), pady=3)
+        for section_title, section_keys in sections:
+            row = self._build_section_header(scroll_frame, section_title, row)
+            for key in section_keys:
+                help_info = CONFIG_HELP.get(key, (key, ""))
+                label_text = help_info[0] if isinstance(help_info, tuple) else key
 
-            value = self.config.get(key, "")
-
-            if isinstance(value, bool):
-                var = ctk.BooleanVar(value=value)
-                ctk.CTkCheckBox(scroll_frame, text="", variable=var, width=30).grid(
-                    row=row, column=1, sticky="w", padx=2, pady=3)
-                self._config_widgets[key] = ("bool", var)
-
-            elif isinstance(value, list):
-                editor = StringListEditor(scroll_frame, height=80)
-                editor.grid(row=row, column=1, sticky="ew", padx=2, pady=3)
-                editor.set_items(value)
-                self._config_widgets[key] = ("list", editor)
-
-            elif isinstance(value, int) and key in ("okww_run_mode",):
-                var = ctk.StringVar(value=str(value))
-                ctk.CTkOptionMenu(scroll_frame, values=["1", "2"], variable=var, width=100).grid(
-                    row=row, column=1, sticky="w", padx=2, pady=3)
-                self._config_widgets[key] = ("option", var)
-
-            elif isinstance(value, (int, float)):
-                var = ctk.StringVar(value=str(value))
-                ctk.CTkEntry(scroll_frame, textvariable=var, width=120).grid(
-                    row=row, column=1, sticky="w", padx=2, pady=3)
-                self._config_widgets[key] = ("number", var, type(value))
-
-            else:
-                var = ctk.StringVar(value=str(value) if value else "")
-                ctk.CTkEntry(scroll_frame, textvariable=var).grid(
-                    row=row, column=1, sticky="ew", padx=2, pady=3)
-
-                if "path" in key or "dir" in key or "exe" in key or "log" in key:
-                    is_dir = "path" in key or "dir" in key
-                    self._config_widgets[key] = ("path_str", var, is_dir)
-                    ctk.CTkButton(
-                        scroll_frame, text="📂", width=35, height=28,
-                        fg_color=COLORS["accent"],
-                        command=lambda k=key, v=var, d=is_dir: self._browse_path(k, v, d),
-                    ).grid(row=row, column=2, padx=2, pady=3)
-                else:
-                    self._config_widgets[key] = ("str", var)
-
-            if isinstance(help_info, tuple) and help_info[1]:
                 ctk.CTkLabel(
-                    scroll_frame, text=f"💡 {help_info[1]}",
-                    text_color=COLORS["text_dim"], anchor="w",
-                ).grid(row=row + 1, column=1, sticky="w", padx=2, pady=(0, 5))
+                    scroll_frame, text=label_text, font=ctk.CTkFont(*FONT_DEFAULT), anchor="w",
+                    text_color=COLORS["text"],
+                ).grid(row=row, column=0, sticky="nw", padx=(8, 16), pady=(8, 0))
 
-            row += (3 if (isinstance(help_info, tuple) and help_info[1]) else 2)
+                value = self.config.get(key, "")
+
+                if isinstance(value, bool):
+                    var = ctk.BooleanVar(value=value)
+                    ctk.CTkSwitch(
+                        scroll_frame, text="", variable=var, width=40,
+                        progress_color=COLORS["highlight"], button_hover_color=COLORS["bg"]
+                    ).grid(row=row, column=1, sticky="w", padx=4, pady=(8, 0))
+                    self._config_widgets[key] = ("bool", var)
+
+                elif isinstance(value, list):
+                    editor = StringListEditor(scroll_frame, height=90)
+                    editor.grid(row=row, column=1, sticky="ew", padx=4, pady=(8, 0))
+                    editor.set_items(value)
+                    self._config_widgets[key] = ("list", editor)
+
+                elif isinstance(value, int) and key in ("okww_run_mode",):
+                    var = ctk.StringVar(value=str(value))
+                    ctk.CTkOptionMenu(
+                        scroll_frame, values=["1", "2"], variable=var, width=120, height=30,
+                        font=ctk.CTkFont(*FONT_DEFAULT), fg_color=COLORS["bg"], button_color=COLORS["accent"]
+                    ).grid(row=row, column=1, sticky="w", padx=4, pady=(8, 0))
+                    self._config_widgets[key] = ("option", var)
+
+                elif isinstance(value, (int, float)):
+                    var = ctk.StringVar(value=str(value))
+                    ctk.CTkEntry(
+                        scroll_frame, textvariable=var, width=120, height=30, font=ctk.CTkFont(*FONT_DEFAULT)
+                    ).grid(row=row, column=1, sticky="w", padx=4, pady=(8, 0))
+                    self._config_widgets[key] = ("number", var, type(value))
+
+                else:
+                    var = ctk.StringVar(value=str(value) if value else "")
+                    ctk.CTkEntry(
+                        scroll_frame, textvariable=var, height=30, font=ctk.CTkFont(*FONT_DEFAULT)
+                    ).grid(row=row, column=1, sticky="ew", padx=4, pady=(8, 0))
+
+                    if "path" in key or "dir" in key or "exe" in key or "log" in key:
+                        is_dir = "path" in key or "dir" in key
+                        self._config_widgets[key] = ("path_str", var, is_dir)
+                        ctk.CTkButton(
+                            scroll_frame, text="📂", width=36, height=30,
+                            fg_color=COLORS["bg"], hover_color=COLORS["border"], text_color=COLORS["text"],
+                            command=lambda k=key, v=var, d=is_dir: self._browse_path(k, v, d),
+                        ).grid(row=row, column=2, padx=(8, 8), pady=(8, 0))
+                    else:
+                        self._config_widgets[key] = ("str", var)
+
+                if isinstance(help_info, tuple) and help_info[1]:
+                    ctk.CTkLabel(
+                        scroll_frame, text=f"💡 {help_info[1]}",
+                        font=ctk.CTkFont(*FONT_SMALL), text_color=COLORS["text_dim"], anchor="w",
+                    ).grid(row=row + 1, column=1, sticky="w", padx=4, pady=(2, 12))
+                    row += 2
+                else:
+                    row += 2
 
     # ===== 主题切换 =====
 
@@ -489,7 +615,6 @@ class GameAutoGUI(ctk.CTk):
         if name not in THEMES or name == self._theme:
             return
         self._theme = name
-        self.config["_theme"] = name
 
         global COLORS, LOG_LEVEL_COLORS, _current_theme_name
         _current_theme_name = name
@@ -502,8 +627,9 @@ class GameAutoGUI(ctk.CTk):
         ctk.set_appearance_mode(t["appearance"])
         ctk.set_default_color_theme(t["ctk_theme"])
 
-        # 保存当前配置值（重建 UI 后会丢失 UI 中的未保存修改）
+        # 保留当前已保存的配置（不读取 UI 中用户尚未确认的半成品修改）
         saved_config = dict(self.config)
+        saved_config["_theme"] = name
 
         # 销毁并重建整个 UI
         for child in self.winfo_children():
@@ -512,8 +638,11 @@ class GameAutoGUI(ctk.CTk):
         self.config = saved_config
         self._build_ui()
 
-        from config_manager import save_config
-        save_config(self.config)
+        # 仅持久化主题选择，不覆盖其他配置项
+        from config_manager import load_config, save_config
+        disk_config = load_config()
+        disk_config["_theme"] = name
+        save_config(disk_config)
 
     # ===== 拖拽分栏 =====
 
@@ -524,7 +653,7 @@ class GameAutoGUI(ctk.CTk):
     def _on_handle_drag(self, event):
         delta = self._drag_start_x - event.x_root
         win_w = self.winfo_width()
-        min_w, max_w = 280, int(win_w * 0.7)
+        min_w, max_w = 320, int(win_w * 0.7)
         new_w = max(min_w, min(max_w, self._drag_start_w + delta))
         self._right_width = new_w
         self._handle.master.grid_columnconfigure(2, minsize=new_w)
@@ -602,7 +731,7 @@ class GameAutoGUI(ctk.CTk):
             ):
                 return
             self.config["schedule_enabled"] = True
-            # 同步勾选 UI 中的复选框
+            # 同步勾选 UI 中的复选框/开关
             if "schedule_enabled" in self._config_widgets:
                 wtype, var = self._config_widgets["schedule_enabled"][:2]
                 if wtype == "bool":
@@ -670,6 +799,16 @@ class GameAutoGUI(ctk.CTk):
             from config_manager import DEFAULT_CONFIG
             import copy
             self.config = copy.deepcopy(DEFAULT_CONFIG)
+            # 同步更新所有 UI 控件
+            for key, info in self._config_widgets.items():
+                default_val = self.config.get(key, "")
+                wtype = info[0]
+                if wtype == "bool":
+                    info[1].set(default_val)
+                elif wtype == "list":
+                    info[1].set_items(default_val)
+                elif wtype in ("option", "number", "str", "path_str"):
+                    info[1].set(str(default_val) if default_val else "")
             self._log_viewer.append("🔄 已恢复默认配置（请点击保存以持久化）", "WARN")
 
     def _start_task(self):
