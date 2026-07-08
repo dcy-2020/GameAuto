@@ -44,9 +44,12 @@
     "round_interval": 600,
     "total_rounds": 1,
     "enable_ai_assist": false,
+    "ai_provider": "aliyun",
+    "ai_base_url": "",
     "dashscope_api_key": "",
     "ai_model": "qwen3-vl-flash",
     "ai_trigger_timeout": 30,
     "ai_max_attempts": 10,
+    "ai_api_timeout": 300,
     "ai_click_confidence": 0.7
 }
