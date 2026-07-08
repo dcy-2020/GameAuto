@@ -60,13 +60,13 @@ THEMES = {
         "bg":        "#1a1b1e",
         "fg":        "#25262b",
         "accent":    "#2c2e33",
-        "highlight": "#7c8090",
+        "highlight": "#9ca3b4",
         "success":   "#4ec9a0",
         "warning":   "#e6ca62",
         "error":     "#fa5252",
         "info":      "#79b8ff",
         "text":      "#c1c2c5",
-        "text_dim":  "#909296",
+        "text_dim":  "#8a8d93",
         "border":    "#373a40",
         "log_bg":    "#141517",
     },
@@ -89,9 +89,9 @@ THEMES = {
     "极光白": {
         "appearance": "light",
         "ctk_theme":  "green",
-        "bg":        "#f8f9fa",
+        "bg":        "#dde2e8",
         "fg":        "#ffffff",
-        "accent":    "#eef1f5",
+        "accent":    "#b8c4ce",
         "highlight": "#1a7f37",
         "success":   "#1a7f37",
         "warning":   "#9a6700",
@@ -99,8 +99,8 @@ THEMES = {
         "info":      "#0969da",
         "text":      "#1f2328",
         "text_dim":  "#545d68",
-        "border":    "#c4ccd4",
-        "log_bg":    "#f3f4f6",
+        "border":    "#9aa5b4",
+        "log_bg":    "#f0f2f5",
     },
 }
 
@@ -123,6 +123,19 @@ def _darker(hex_color: str, factor: float = 0.8) -> str:
     return f"#{r:02x}{g:02x}{b:02x}"
 
 
+def _lighter(hex_color: str, factor: float = 1.25) -> str:
+    """返回 hex 颜色的亮色变体，用于亮色主题 hover 反馈"""
+    r, g, b = int(hex_color[1:3], 16), int(hex_color[3:5], 16), int(hex_color[5:7], 16)
+    r, g, b = min(255, int(r * factor)), min(255, int(g * factor)), min(255, int(b * factor))
+    return f"#{r:02x}{g:02x}{b:02x}"
+
+
+def _is_light(hex_color: str) -> bool:
+    """判断颜色是否为背景偏亮（> 0.5 相对亮度）"""
+    r, g, b = int(hex_color[1:3], 16), int(hex_color[3:5], 16), int(hex_color[5:7], 16)
+    return (0.299 * r + 0.587 * g + 0.114 * b) > 128
+
+
 class LogViewer(ctk.CTkFrame):
     """实时日志查看器 - 彩色分级显示"""
 
@@ -134,12 +147,16 @@ class LogViewer(ctk.CTkFrame):
             fg_color=COLORS.get("log_bg", COLORS["bg"]),
             text_color=COLORS["text"],
             font=ctk.CTkFont(*FONT_CODE),
-            wrap="word",
             corner_radius=CORNER_MEDIUM,
             border_width=1,
             border_color=COLORS["border"]
         )
         self.textbox.pack(fill="both", expand=True, padx=2, pady=2)
+
+        # 自定义滚动条颜色，与主题一致
+        scrollbar_color = COLORS["border"]
+        scrollbar_hover = COLORS["highlight"]
+        self.textbox.configure(scrollbar_button_color=scrollbar_color, scrollbar_button_hover_color=scrollbar_hover)
 
         self.textbox.tag_config("INFO", foreground=LOG_LEVEL_COLORS["INFO"])
         self.textbox.tag_config("WARN", foreground=LOG_LEVEL_COLORS["WARN"])
@@ -181,20 +198,21 @@ class StringListEditor(ctk.CTkFrame):
 
         ctk.CTkButton(
             btn_row, text="+ 添加项目", width=80, height=28,
-            font=ctk.CTkFont(*FONT_DEFAULT),
+            font=ctk.CTkFont(*FONT_DEFAULT), corner_radius=CORNER_SMALL,
             fg_color=COLORS["accent"], hover_color=COLORS["border"], text_color=COLORS["text"],
             command=self._add_item,
         ).pack(side="left", padx=(0, 6))
 
         ctk.CTkButton(
             btn_row, text="清空列表", width=70, height=28,
-            font=ctk.CTkFont(*FONT_DEFAULT),
+            font=ctk.CTkFont(*FONT_DEFAULT), corner_radius=CORNER_SMALL,
             fg_color="transparent", border_width=1, border_color=COLORS["border"], text_color=COLORS["text_dim"],
             hover_color=COLORS["accent"],
             command=self.clear,
         ).pack(side="left")
 
-        self._scroll_frame = ctk.CTkScrollableFrame(self, fg_color=COLORS["bg"], height=100, corner_radius=CORNER_MEDIUM)
+        self._scroll_frame = ctk.CTkScrollableFrame(self, fg_color=COLORS["bg"], height=100, corner_radius=CORNER_MEDIUM,
+                                                     scrollbar_fg_color=COLORS["border"], scrollbar_button_hover_color=COLORS["highlight"])
         self._scroll_frame.grid(row=1, column=0, sticky="nsew")
         self._scroll_frame.grid_columnconfigure(0, weight=1)
 
@@ -212,14 +230,17 @@ class StringListEditor(ctk.CTkFrame):
         frame.grid(row=row, column=0, sticky="ew", pady=2)
         frame.grid_columnconfigure(0, weight=1)
 
-        entry = ctk.CTkEntry(frame, placeholder_text="请输入内容...", font=ctk.CTkFont(*FONT_DEFAULT), height=28)
+        entry = ctk.CTkEntry(frame, placeholder_text="请输入内容...", font=ctk.CTkFont(*FONT_DEFAULT), height=28,
+                              corner_radius=CORNER_SMALL,
+                              fg_color=COLORS["bg"], text_color=COLORS["text"],
+                              border_width=1, border_color=COLORS["border"])
         entry.grid(row=0, column=0, sticky="ew", padx=(0, 6))
         if value:
             entry.insert(0, value)
 
         btn = ctk.CTkButton(
             frame, text="✕", width=28, height=28,
-            font=ctk.CTkFont(*FONT_DEFAULT),
+            font=ctk.CTkFont(*FONT_DEFAULT), corner_radius=CORNER_SMALL,
             fg_color="transparent", hover_color=COLORS["error"], text_color=COLORS["text_dim"],
             command=lambda f=frame, e=entry: self._remove_item(f, e),
         )
@@ -309,7 +330,7 @@ class GameAutoGUI(ctk.CTk):
                 theme_group, text=name, width=54, height=26,
                 font=ctk.CTkFont(*FONT_SMALL),
                 fg_color=COLORS["highlight"] if is_active else "transparent",
-                text_color="#ffffff" if is_active else COLORS["text_dim"],
+                text_color="#ffffff" if THEMES[self._theme]["appearance"] == "dark" else COLORS["text"],
                 hover_color=COLORS["highlight"] if is_active else COLORS["accent"],
                 corner_radius=CORNER_SMALL,
                 command=lambda n=name: self._switch_theme(n),
@@ -347,7 +368,7 @@ class GameAutoGUI(ctk.CTk):
         self._handle.bind("<B1-Motion>", self._on_handle_drag)
         # 手柄中间画一条竖线
         handle_line = ctk.CTkFrame(self._handle, width=3, fg_color=COLORS["border"], corner_radius=2)
-        handle_line.place(relx=0.5, rely=0.5, relheight=0.2, anchor="center")
+        handle_line.place(relx=0.5, rely=0.5, relheight=0.6, anchor="center")
         # 手柄悬停高亮
         def on_enter(e): handle_line.configure(fg_color=COLORS["highlight"])
         def on_leave(e): handle_line.configure(fg_color=COLORS["border"])
@@ -397,7 +418,7 @@ class GameAutoGUI(ctk.CTk):
         ctk.CTkLabel(log_header, text="📋 运行日志", font=ctk.CTkFont(*FONT_BOLD)).pack(side="left")
         ctk.CTkButton(
             log_header, text="清空", width=60, height=26,
-            font=ctk.CTkFont(*FONT_SMALL),
+            font=ctk.CTkFont(*FONT_SMALL), corner_radius=CORNER_SMALL,
             fg_color="transparent", border_width=1, border_color=COLORS["border"], text_color=COLORS["text_dim"],
             hover_color=COLORS["accent"],
             command=self._clear_log,
@@ -424,13 +445,13 @@ class GameAutoGUI(ctk.CTk):
 
         ctk.CTkButton(
             sched_bar, text="配置任务", width=70, height=30,
-            font=ctk.CTkFont(*FONT_DEFAULT),
+            font=ctk.CTkFont(*FONT_DEFAULT), corner_radius=CORNER_SMALL,
             fg_color=COLORS["accent"], text_color=COLORS["text"], hover_color=COLORS["border"],
             command=self._schedule_create,
         ).pack(side="right", padx=(4, 12), pady=12)
         ctk.CTkButton(
             sched_bar, text="取消任务", width=60, height=30,
-            font=ctk.CTkFont(*FONT_DEFAULT),
+            font=ctk.CTkFont(*FONT_DEFAULT), corner_radius=CORNER_SMALL,
             fg_color="transparent", text_color=COLORS["error"], hover_color=COLORS["accent"],
             command=self._schedule_delete,
         ).pack(side="right", padx=0, pady=12)
@@ -441,14 +462,14 @@ class GameAutoGUI(ctk.CTk):
 
         ctk.CTkButton(
             ctrl_bar, text="💾 保存配置", width=95, height=36,
-            font=ctk.CTkFont(*FONT_DEFAULT),
+            font=ctk.CTkFont(*FONT_DEFAULT), corner_radius=CORNER_SMALL,
             fg_color=COLORS["accent"], hover_color=COLORS["border"], text_color=COLORS["text"],
             command=self._save_config,
         ).pack(side="left", padx=(0, 8))
 
         ctk.CTkButton(
             ctrl_bar, text="🔄 恢复默认", width=95, height=36,
-            font=ctk.CTkFont(*FONT_DEFAULT),
+            font=ctk.CTkFont(*FONT_DEFAULT), corner_radius=CORNER_SMALL,
             fg_color="transparent", border_width=1, border_color=COLORS["border"], text_color=COLORS["text_dim"],
             hover_color=COLORS["accent"],
             command=self._reset_config,
@@ -456,16 +477,20 @@ class GameAutoGUI(ctk.CTk):
 
         self._start_btn = ctk.CTkButton(
             ctrl_bar, text="▶ 开始执行", width=110, height=36,
-            font=ctk.CTkFont(*FONT_BOLD),
-            fg_color=COLORS["success"], hover_color=_darker(COLORS["success"]), text_color="#ffffff",
+            font=ctk.CTkFont(*FONT_BOLD), corner_radius=CORNER_SMALL,
+            fg_color=COLORS["success"],
+            hover_color=_darker(COLORS["success"]) if THEMES[self._theme]["appearance"] == "dark" else _lighter(COLORS["success"]),
+            text_color="#ffffff",
             command=self._start_task,
         )
         self._start_btn.pack(side="right", padx=(8, 0))
 
         self._stop_btn = ctk.CTkButton(
             ctrl_bar, text="⏹ 停止", width=80, height=36,
-            font=ctk.CTkFont(*FONT_BOLD),
-            fg_color=COLORS["error"], hover_color=_darker(COLORS["error"]), text_color="#ffffff",
+            font=ctk.CTkFont(*FONT_BOLD), corner_radius=CORNER_SMALL,
+            fg_color=COLORS["error"],
+            hover_color=_darker(COLORS["error"]) if THEMES[self._theme]["appearance"] == "dark" else _lighter(COLORS["error"]),
+            text_color="#ffffff",
             command=self._stop_task,
             state="disabled",
         )
@@ -526,7 +551,7 @@ class GameAutoGUI(ctk.CTk):
     def _build_config_form(self, parent_tab, keys: list):
         from config_manager import CONFIG_HELP, CONFIG_GROUPS
 
-        scroll_frame = ctk.CTkScrollableFrame(parent_tab, fg_color="transparent")
+        scroll_frame = ctk.CTkScrollableFrame(parent_tab, fg_color="transparent", scrollbar_fg_color=COLORS["border"], scrollbar_button_hover_color=COLORS["highlight"])
         scroll_frame.pack(fill="both", expand=True, padx=4, pady=4)
         scroll_frame.grid_columnconfigure(1, weight=1)
 
@@ -557,7 +582,10 @@ class GameAutoGUI(ctk.CTk):
                     var = ctk.BooleanVar(value=value)
                     ctk.CTkSwitch(
                         scroll_frame, text="", variable=var, width=40,
-                        progress_color=COLORS["highlight"], button_hover_color=COLORS["bg"]
+                        fg_color=COLORS["accent"],
+                        progress_color=COLORS["highlight"],
+                        button_color=COLORS["text"],
+                        border_width=0, border_color=COLORS["border"],
                     ).grid(row=row, column=1, sticky="w", padx=4, pady=(8, 0))
                     self._config_widgets[key] = ("bool", var)
 
@@ -571,7 +599,10 @@ class GameAutoGUI(ctk.CTk):
                     var = ctk.StringVar(value=str(value) if value else "aliyun")
                     ctk.CTkOptionMenu(
                         scroll_frame, values=["aliyun"], variable=var, width=120, height=30,
-                        font=ctk.CTkFont(*FONT_DEFAULT), fg_color=COLORS["bg"], button_color=COLORS["accent"]
+                        font=ctk.CTkFont(*FONT_DEFAULT), corner_radius=CORNER_SMALL,
+                        fg_color=COLORS["bg"], button_color=COLORS["accent"],
+                        text_color=COLORS["text"], button_hover_color=COLORS["border"],
+                        dropdown_fg_color=COLORS["bg"], dropdown_text_color=COLORS["text"],
                     ).grid(row=row, column=1, sticky="w", padx=4, pady=(8, 0))
                     self._config_widgets[key] = ("option", var)
 
@@ -579,28 +610,37 @@ class GameAutoGUI(ctk.CTk):
                     var = ctk.StringVar(value=str(value))
                     ctk.CTkOptionMenu(
                         scroll_frame, values=["1", "2"], variable=var, width=120, height=30,
-                        font=ctk.CTkFont(*FONT_DEFAULT), fg_color=COLORS["bg"], button_color=COLORS["accent"]
+                        font=ctk.CTkFont(*FONT_DEFAULT), corner_radius=CORNER_SMALL,
+                        fg_color=COLORS["bg"], button_color=COLORS["accent"],
+                        text_color=COLORS["text"], button_hover_color=COLORS["border"],
+                        dropdown_fg_color=COLORS["bg"], dropdown_text_color=COLORS["text"],
                     ).grid(row=row, column=1, sticky="w", padx=4, pady=(8, 0))
                     self._config_widgets[key] = ("option", var)
 
                 elif isinstance(value, (int, float)):
                     var = ctk.StringVar(value=str(value))
                     ctk.CTkEntry(
-                        scroll_frame, textvariable=var, width=120, height=30, font=ctk.CTkFont(*FONT_DEFAULT)
+                        scroll_frame, textvariable=var, width=120, height=30, font=ctk.CTkFont(*FONT_DEFAULT),
+                        corner_radius=CORNER_SMALL,
+                        fg_color=COLORS["bg"], text_color=COLORS["text"],
+                        border_width=1, border_color=COLORS["border"],
                     ).grid(row=row, column=1, sticky="w", padx=4, pady=(8, 0))
                     self._config_widgets[key] = ("number", var, type(value))
 
                 else:
                     var = ctk.StringVar(value=str(value) if value else "")
                     ctk.CTkEntry(
-                        scroll_frame, textvariable=var, height=30, font=ctk.CTkFont(*FONT_DEFAULT)
+                        scroll_frame, textvariable=var, height=30, font=ctk.CTkFont(*FONT_DEFAULT),
+                        corner_radius=CORNER_SMALL,
+                        fg_color=COLORS["bg"], text_color=COLORS["text"],
+                        border_width=1, border_color=COLORS["border"],
                     ).grid(row=row, column=1, sticky="ew", padx=4, pady=(8, 0))
 
                     if "path" in key or "dir" in key or "exe" in key or "log" in key:
                         is_dir = "path" in key or "dir" in key
                         self._config_widgets[key] = ("path_str", var, is_dir)
                         ctk.CTkButton(
-                            scroll_frame, text="📂", width=36, height=30,
+                            scroll_frame, text="📂", width=36, height=30, corner_radius=CORNER_SMALL,
                             fg_color=COLORS["bg"], hover_color=COLORS["border"], text_color=COLORS["text"],
                             command=lambda k=key, v=var, d=is_dir: self._browse_path(k, v, d),
                         ).grid(row=row, column=2, padx=(8, 8), pady=(8, 0))

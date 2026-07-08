@@ -47,3 +47,32 @@ release/
 # 系统文件
 Thumbs.db
 Desktop.ini
+
+# 虚拟环境与缓存 (.claudeignore 同步)
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.pyd
+
+# 包管理器
+*.whl
+poetry.lock
+uv.lock
+pip-log.txt
+
+# 数据库
+*.db
+*.sqlite3
+
+# 敏感信息与密钥
+.env
+.env.*
+.secrets/
+*.pem
+*.key
+
+# 编译扩展
+*.so
