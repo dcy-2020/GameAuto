@@ -5,17 +5,23 @@ echo   GameAuto Daily - 一键打包脚本
 echo ========================================
 echo.
 
-:: 检查 Python
-python --version >nul 2>&1
-if %errorlevel% neq 0 (
-    echo [错误] 未找到 Python
-    pause
-    exit /b 1
+REM 优先用 py 启动器（始终在 PATH），其次 python
+set PY_CMD=python
+py --version >nul 2>&1
+if %errorlevel% equ 0 (
+    set PY_CMD=py
+) else (
+    python --version >nul 2>&1
+    if %errorlevel% neq 0 (
+        echo [错误] 未找到 Python
+        pause
+        exit /b 1
+    )
 )
 
 :: 安装依赖
 echo [1/3] 安装依赖...
-pip install -r requirements.txt --quiet
+%PY_CMD% -m pip install -r requirements.txt --quiet
 
 :: 清理旧构建
 echo [2/3] 清理旧构建...
